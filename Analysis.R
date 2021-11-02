@@ -1,6 +1,7 @@
 library(lubridate)
 library(ggplot2)
 library(patchwork)
+library(reshape2)
 
 # names of the raw data files
 filenames <- list.files("RawData/iNatData")
@@ -14,9 +15,6 @@ for (i in 1:length(filenames)) {
   record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i]))
 }
 
-# 去除异常值
-record$Yokohama <-
-  record$Yokohama[which(record$Yokohama$user_login != "jeanvaljean"), ]
 
 # 比较年度观察总数，观察者数量，人均观察数
 # 统计观察总数
@@ -207,6 +205,102 @@ p4 <- ggplot(covid_monthly) + geom_col(aes(x = month, number)) +
   facet_wrap(.~prefecture, nrow = 1, scales = "free_y")
 p1 / p2 / p3 / p4
 
+# 微观分析：追踪连续参与用户的变化 ----
+# 输出各用户每年的观测数宽表
+fun_usertrack <- function(obs_user_year) {
+  obs_user_year <- obs_user_year[c("user_login", "observed_on")]
+  obs_user_year$observed_on <- year(as_date(obs_user_year$observed_on))
+  obs_user_year <-
+    aggregate(obs_user_year$user_login,
+              by = list(obs_user_year$user_login, obs_user_year$observed_on),
+              FUN = "length")
+  names(obs_user_year) <- c("user", "year", "obs")
+  # 转换成宽数据
+  obs_user_year <- dcast(obs_user_year, user ~ year, value.var = "obs")
+  # 输出数据
+  return(obs_user_year)
+}
 
+fun_contuser <- function(obs_user_year) {
+  # 输入用户每年观测数宽表
+  # 以两年为窗口，循环计算两年之间的差值
+  # 建立向量，以存储各个城市2016-2020年每年相比前一年，连续用户中观测数增长的比例
+  usertrack_output <- vector("numeric")
+  for (i in 2016:2020) {
+    # 计算两年差值
+    obs_user_year[paste0("chg", i)] <-
+      obs_user_year[paste(i)] - obs_user_year[paste(i-1)]
+    usertrack_output <-
+      c(usertrack_output,
+        # 接入连续用户数总数
+        sum(is.na(obs_user_year[paste0("chg", i)]) == FALSE))
+  }
+  # 输出观测数增长的连续用户数占总连续用户数的比例
+  return(usertrack_output)
+}
+
+fun_contusermoreprop <- function(obs_user_year) {
+  # 输入用户每年观测数宽表
+  # 以两年为窗口，循环计算两年之间的差值
+  # 建立向量，以存储各个城市2016-2020年每年相比前一年，连续用户中观测数增长的比例
+  usertrack_output <- vector("numeric")
+  for (i in 2016:2020) {
+    # 计算两年差值
+    obs_user_year[paste0("chg", i)] <-
+      obs_user_year[paste(i)] - obs_user_year[paste(i-1)]
+    usertrack_output <-
+      c(usertrack_output,
+        # 接入观测数增长的连续用户数占总连续用户数的比例
+        sum(obs_user_year[paste0("chg", i)] > 0, na.rm = TRUE) /
+          sum(is.na(obs_user_year[paste0("chg", i)]) == FALSE))
+  }
+  # 输出观测数增长的连续用户数占总连续用户数的比例
+  return(usertrack_output)
+}
+
+# 生成各城市每个用户每年的观测数
+obs_user_year <- lapply(record, fun_usertrack)
+# 虽然下载了2015-2020的数据，但有些城市并没有2015年的数据
+# 权宜之计，对于这些城市，2015年数据补全为NA
+obs_user_year$Kawasaki$"2015" <- NA
+obs_user_year$Saitama$"2015" <- NA
+
+# 生成各城市每年连续用户数数据框
+contuser_city_year <- lapply(obs_user_year, fun_contuser)
+contuser_city_year <- as.data.frame(Reduce(rbind, contuser_city_year))
+contuser_city_year$city <- names(obs_user_year)
+rownames(contuser_city_year) <- NULL
+names(contuser_city_year) <- c(2016:2020, "city")
+contuser_city_year <- contuser_city_year[c("city", 2016:2020)]
+# 转化成长表
+contuser_city_year <-
+  melt(contuser_city_year, id = "city",
+       variable.name = "year", value.name = "contuser")
+# 权宜之计：对连续用户少于10人的年份不予分析
+contuser_city_year <-
+  contuser_city_year[which(contuser_city_year$contuser > 10), ]
+
+# 生成各城市每年连续用户中观测增长者比例的数据框
+contusermoreprop_city_year <- lapply(obs_user_year, fun_contusermoreprop)
+contusermoreprop_city_year <- as.data.frame(Reduce(rbind, contusermoreprop_city_year))
+contusermoreprop_city_year$city <- names(obs_user_year)
+rownames(contusermoreprop_city_year) <- NULL
+names(contusermoreprop_city_year) <- c(2016:2020, "city")
+contusermoreprop_city_year <- contusermoreprop_city_year[c("city", 2016:2020)]
+# 转化成长表
+contusermoreprop_city_year <-
+  melt(contusermoreprop_city_year, id = "city",
+       variable.name = "year", value.name = "contusermoreprop")
+
+# 保留和连续用户数据框一致的条目
+contuser_all <-
+  merge(contuser_city_year, contusermoreprop_city_year, by = c("city", "year"))
+p1 <- ggplot(contuser_city_year) + geom_col(aes(year, contuser)) +
+  facet_wrap(.~city, nrow = 1)
+p2 <- ggplot(contuser_all) + geom_col(aes(year, contusermoreprop)) +
+  facet_wrap(.~city, nrow = 1)
+p1 / p2
+
+# 暂时的结论：大约一半的连续用户在2020年观测数比2019年多，当然这个数据也要和2018-2019年的变化量进行对比
 
 
