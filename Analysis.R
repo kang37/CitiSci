@@ -3,6 +3,7 @@ library(ggplot2)
 library(patchwork)
 library(reshape2)
 
+# 读取数据 ----
 # names of the raw data files
 filenames <- list.files("RawData/iNatData")
 filenames <- grep(".csv", filenames, value = TRUE)
@@ -15,7 +16,7 @@ for (i in 1:length(filenames)) {
   record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i]))
 }
 
-
+# 年度分析 ----
 # 比较年度观察总数，观察者数量，人均观察数
 # 统计观察总数
 fun_yearly <- function(x) {
@@ -84,7 +85,7 @@ record_monthly <- Reduce(rbind, record_monthly)
 record_monthly <-
   record_monthly[which(record_monthly$year %in% c("2018", "2019", "2020")), ]
 
-
+# 月度分析 ----
 # 每月观察者数量
 fun_user_monthly <- function(x) {
   x[, "year"] <- year(as.Date(x[, "observed_on"]))
@@ -168,7 +169,6 @@ p3 <- ggplot(change_obsperuser_monthly) +
             fill = "light blue") +
   geom_col(aes(x = month, y = decrease_rate)) +
   facet_wrap(.~city, nrow = 1)
-
 
 
 # 结合紧急事态和疫情情况分析
