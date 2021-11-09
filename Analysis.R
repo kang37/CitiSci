@@ -174,11 +174,6 @@ p3 <- ggplot(change_obsperuser_monthly) +
 # 结合紧急事态和疫情情况分析
 # 基本上从二月~四月开始受影响
 # 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
-ggplot(record_yearly) +
-  geom_rect(aes(xmin = 2016, xmax = 2018, fill = "blue")) +
-  geom_line(aes(year, observation, color = city))
-
-
 covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv")
 covid <- covid[c("日付", "都道府県名", "各地の感染者数_1日ごとの発表数")]
 names(covid) <- c("date", "prefecture", "number")
