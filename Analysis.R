@@ -298,4 +298,63 @@ p1 / p2
 
 # 暂时的结论：大约一半的连续用户在2020年观测数比2019年多，当然这个数据也要和2018-2019年的变化量进行对比，比如从连续用户总数和连续用户中观测数增长者的占比的对比可以看出，虽然2019-2020很多城市的连续用户数上升了，但是比例却下降了，可能也反映了新冠的影响，就是说有更多人在2020年持续上传观测，这可能是平台持续增长的体现，但是同时观测增加者的比例却下降了
 
+# 老用户行为和其他用户对比
+# 老用户的观测数是否显著高于其他人？
+# 挑出老用户
+longtime_user_plot <- vector("list", length(record))
+names(longtime_user_plot) <- names(obs_user_year)
+
+for (name_city in names(obs_user_year)) {
+  # 2015-2020年间3年有观测记录的用户定义为老用户
+  obs_user_year[[name_city]]$yr_obs <-
+    rowSums(is.na(obs_user_year[[name_city]]) == FALSE) - 1
+  obs_user_year[[name_city]]$longtime_user <- "shorttime"
+  obs_user_year[[name_city]]$longtime_user[which(
+    obs_user_year[[name_city]]$yr_obs >= 3)] <- "longtime"
+
+  obs_user_year[[name_city]] <-
+    melt(obs_user_year[[name_city]], id = c("user", "longtime_user"),
+         variable.name = "year", value.name = "obs")
+
+  summary(aov(obs ~ longtime_user, data = obs_user_year[[name_city]]))
+  plot <- ggplot(obs_user_year[[name_city]][
+    colnames(obs_user_year[[name_city]]) != c("yr_obs")]) +
+    geom_boxplot(aes(longtime_user, obs)) +
+    facet_wrap(.~year, nrow = 1, scales = "free_y")
+  longtime_user_plot[[name_city]] <-
+    plot
+}
+
+# 老用户在各年份的上传数视觉上判断比较高
+Reduce("/", longtime_user_plot[1:3])
+Reduce("/", longtime_user_plot[4:7])
+
+# 那么老用户2020年的变化是否和其他用户不同呢？
+for (name_city in names(obs_user_year)) {
+  # 再将各用户每年观测数据转化为宽表
+  obs_user_year[[name_city]] <-
+    dcast(obs_user_year[[name_city]], user + longtime_user ~ year)
+  # 计算2019-2020变化率
+  obs_user_year[[name_city]]$chg <-
+    (obs_user_year[[name_city]]$"2020" - obs_user_year[[name_city]]$"2019") /
+    obs_user_year[[name_city]]$"2019"
+}
+
+# 对各个城市的变化率做盒形图
+for (name_city in names(obs_user_year)) {
+  obs_user_year[[name_city]] <-
+    obs_user_year[[name_city]][c("user", "longtime_user", "chg")]
+  obs_user_year[[name_city]] <-
+    obs_user_year[[name_city]][which(is.na(obs_user_year[[name_city]]$chg) == FALSE), ]
+  obs_user_year[[name_city]] <-
+    obs_user_year[[name_city]][which(obs_user_year[[name_city]]$chg < 20), ]
+  plot <- ggplot(obs_user_year[[name_city]]) +
+    geom_boxplot(aes(longtime_user, chg)) +
+    labs(title = name_city)
+  print(plot)
+  # 检测老用户和其他用户统计区别
+  print(name_city)
+  print(summary(aov(chg ~ longtime_user, data = obs_user_year[[name_city]])))
+}
+# 视觉上不易判断是否有显著差别，但是，在一些城市如东京、琦玉，短期观测者2020年观测数上升，而在另外一些城市，长期观测者的观测数上升；在限制变化率小于20的情况下，AOV检测两组无统计学差异
 
