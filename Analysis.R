@@ -358,3 +358,26 @@ for (name_city in names(obs_user_year)) {
 }
 # 视觉上不易判断是否有显著差别，但是，在一些城市如东京、琦玉，短期观测者2020年观测数上升，而在另外一些城市，长期观测者的观测数上升；在限制变化率小于20的情况下，AOV检测两组无统计学差异
 
+# 换个思路：将2019-2020年上传增加的用户挑出来看有什么特点
+# 重新构建每个用户每年上传记录列表
+obs_user_year <- lapply(record, fun_usertrack)
+# 虽然下载了2015-2020的数据，但有些城市并没有2015年的数据
+# 权宜之计，对于这些城市，2015年数据补全为NA
+obs_user_year$Kawasaki$"2015" <- NA
+obs_user_year$Saitama$"2015" <- NA
+
+# 挑出2019-2020增长的用户
+fun_change_rate <- function(x, name_year_start = "2019", name_year_end = "2020") {
+  x[, "chg"] <-
+    (x[, name_year_end] - x[, name_year_start]) / x[, name_year_start]
+  x <- x[is.na(x$chg) == FALSE, ]
+  x[, "mean"] <- rowMeans(x[!colnames(x) %in% c("user", "chg")], na.rm = TRUE)
+  return(x)
+}
+obs_user_year <- lapply(obs_user_year, fun_change_rate)
+
+# 查看各个城市2019年上传数、2020年上传数、多年平均数和2019-2020变化率的关系
+for (name_city in names(obs_user_year)) {
+  plot(obs_user_year[[name_city]][c("2019", "2020", "chg", "mean")], main = name_city)
+}
+# 基本结论：没有关系
