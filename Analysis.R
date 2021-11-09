@@ -381,3 +381,38 @@ for (name_city in names(obs_user_year)) {
   plot(obs_user_year[[name_city]][c("2019", "2020", "chg", "mean")], main = name_city)
 }
 # 基本结论：没有关系
+
+# 物种鉴别数据分析 ----
+# 疫情期间鉴别率是否上升？
+fun_id_rate <- function(x) {
+  # 保留观测时间和鉴定者数数据
+  x <- x[c("observed_on", "num_identification_agreements",
+           "num_identification_disagreements")]
+  x[, "year"] <- year(as_date(x[, "observed_on"]))
+  x[, "num_id"] <- x[, "num_identification_agreements"] +
+    x[, "num_identification_disagreements"]
+  # 汇总计算每年的鉴定率
+  # 每年总观测数
+  x_agg <-
+    aggregate(x[, "num_identification_agreements"],
+              by = list(x[, "year"]), FUN = "length")
+  # 其中鉴定数大于0的观测数
+  x_agg[, "identified"] <-
+    aggregate(x[which(x[, "num_id"] > 0), "num_identification_agreements"],
+              by = list(x[which(x[, "num_id"] > 0), "year"]),
+              FUN = "length")[, 2]
+  names(x_agg) <- c("year", "obs_tot", "obs_id")
+  x_agg[, "id_rate"] <- x_agg[, "obs_id"] / x_agg[, "obs_tot"]
+  return(x_agg)
+}
+
+id_year <- lapply(record, fun_id_rate)
+
+# 作图：各城市2015-2020年鉴定率变化
+par(mfrow = c(3, 4))
+for (name_city in names(id_year)) {
+  plot(id_year[[name_city]]$year, id_year[[name_city]]$id_rate, type = "l",
+       main = name_city, xlab = "", ylab = "id_rate")
+}
+# 结论：2020年鉴定率升高的城市只是少数
+
