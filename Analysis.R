@@ -2,8 +2,13 @@ library(lubridate)
 library(ggplot2)
 library(patchwork)
 library(reshape2)
+library(openxlsx)
 
 # 读取数据 ----
+# 读取目标县名和城市名对应文件
+pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx")
+pre_city <- pre_city[is.na(pre_city$city_en) == FALSE, ]
+
 # names of the raw data files
 filenames <- list.files("RawData/iNatData")
 filenames <- grep(".csv", filenames, value = TRUE)
@@ -127,9 +132,10 @@ p3 <- ggplot(record_obsperuser_monthly) +
 p1 / p2 / p3
 
 # 2020年相比2019年每月下降多少
-# 选择目标城市：2019年年用户数量达到100以上
-tar_city <- record_user_yearly[which(record_user_yearly$year == 2019 &
-                                       record_user_yearly$users > 100), ]$city
+# 备用：选择目标城市：2019年年用户数量达到100以上
+# tar_city <- record_user_yearly[which(record_user_yearly$year == 2019 &
+#                                        record_user_yearly$users > 100), ]$city
+tar_city <- names(record)
 
 fun_change_monthly <- function(x, name_var) {
   change_monthly <-
@@ -148,11 +154,12 @@ change_monthly <- fun_change_monthly(record_monthly, "observation")
 
 change_user_monthly <- fun_change_monthly(record_user_monthly, "users")
 
-
 change_obsperuser_monthly <-
   fun_change_monthly(record_obsperuser_monthly, "obsperuser")
 
 change_monthly$month <- as.numeric(change_monthly$month)
+# 按照从北到南对城市进行排序
+change_monthly$city <- factor(change_monthly$city, levels = pre_city$city_en)
 
 p1 <- ggplot(change_monthly) +
   geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
@@ -171,30 +178,29 @@ p3 <- ggplot(change_obsperuser_monthly) +
   facet_wrap(.~city, nrow = 1)
 
 
-# 结合紧急事态和疫情情况分析
+# 紧急事态和疫情情况分析
 # 基本上从二月~四月开始受影响
 # 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
+# 各县感染者数量
 covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv")
 covid <- covid[c("日付", "都道府県名", "各地の感染者数_1日ごとの発表数")]
 names(covid) <- c("date", "prefecture", "number")
+
 covid <-
-  covid[which(covid$prefecture %in% c("京都府", "大阪府", "東京都", "神奈川県")), ]
-covid$prefecture[which(covid$prefecture == "京都府")] <- "Kyoto prefecture"
-covid$prefecture[which(covid$prefecture == "大阪府")] <- "Osaka prefecture"
-covid$prefecture[which(covid$prefecture == "東京都")] <- "Tokyo prefecture"
-covid$prefecture[which(covid$prefecture == "神奈川県")] <- "Kanagawa prefecture"
+  covid[which(covid$prefecture %in% pre_city$prefecture_jp), ]
+covid <- merge(covid, pre_city, by.x = "prefecture", by.y = "prefecture_jp")
 
 covid$date <- as.Date(covid$date)
 covid[, "year"] <- year(covid$date)
 covid[, "month"] <- month(covid$date)
 covid <- covid[which(covid$year == "2020"), ]
 
-covid_monthly <- aggregate(covid$number, by = list(covid$prefecture, covid$month),
+covid_monthly <- aggregate(covid$number, by = list(covid$prefecture_en, covid$month),
                            FUN = "sum")
 names(covid_monthly) <- c("prefecture", "month", "number")
-covid_monthly$prefecture <- factor(covid_monthly$prefecture,
-                                   levels = c("Kyoto prefecture", "Osaka prefecture",
-                                              "Tokyo prefecture", "Kanagawa prefecture"))
+# 权宜之计：按照从北到南对城市进行排序
+covid_monthly$prefecture <-
+  factor(covid_monthly$prefecture, levels = unique(pre_city$prefecture_en))
 
 p4 <- ggplot(covid_monthly) + geom_col(aes(x = month, number)) +
   facet_wrap(.~prefecture, nrow = 1, scales = "free_y")
