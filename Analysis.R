@@ -132,9 +132,6 @@ p3 <- ggplot(record_obsperuser_monthly) +
 p1 / p2 / p3
 
 # 2020年相比2019年每月下降多少
-# 备用：选择目标城市：2019年年用户数量达到100以上
-# tar_city <- record_user_yearly[which(record_user_yearly$year == 2019 &
-#                                        record_user_yearly$users > 100), ]$city
 tar_city <- names(record)
 
 fun_change_monthly <- function(x, name_var) {
