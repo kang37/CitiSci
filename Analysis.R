@@ -134,25 +134,33 @@ p1 / p2 / p3
 # 2020年相比2019年每月下降多少
 tar_city <- names(record)
 
-fun_change_monthly <- function(x, name_var) {
+fun_mthchange_2019_2020 <- function(x, name_var) {
   change_monthly <-
     merge(x[which(x$year == "2019"), ],
           x[which(x$year == "2020"), ],
           by = c("city", "month"))
-  change_monthly[, "decrease_rate"] <-
+  # 计算2020年相对于2019年的变化率
+  change_monthly[, "change_rate"] <-
     (change_monthly[, paste0(name_var, ".y")] -
        change_monthly[, paste0(name_var, ".x")]) /
     change_monthly[, paste0(name_var, ".x")]
+  # 留下目标城市的数据
   change_monthly <- change_monthly[which(change_monthly$city %in% tar_city), ]
   return(change_monthly)
 }
 
-change_monthly <- fun_change_monthly(record_monthly, "observation")
+change_monthly <- fun_mthchange_2019_2020(record_monthly, "observation")
 
-change_user_monthly <- fun_change_monthly(record_user_monthly, "users")
+change_user_monthly <- fun_mthchange_2019_2020(record_user_monthly, "users")
+# 按照从北到南对城市进行排序
+change_user_monthly$city <-
+  factor(change_user_monthly$city, levels = pre_city$city_en)
 
 change_obsperuser_monthly <-
-  fun_change_monthly(record_obsperuser_monthly, "obsperuser")
+  fun_mthchange_2019_2020(record_obsperuser_monthly, "obsperuser")
+# 按照从北到南对城市进行排序
+change_obsperuser_monthly$city <-
+  factor(change_obsperuser_monthly$city, levels = pre_city$city_en)
 
 change_monthly$month <- as.numeric(change_monthly$month)
 # 按照从北到南对城市进行排序
@@ -162,11 +170,11 @@ p1 <- ggplot(change_monthly) +
   geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
             fill = "light blue") +
   geom_col(aes(x = month, y = decrease_rate)) +
-  facet_wrap(.~city, nrow = 1)
+  facet_wrap(.~city, nrow = 1, scales = "free_y")
 p2 <- ggplot(change_user_monthly) +
   geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
             fill = "light blue") +
-  geom_col(aes(x = month, y = decrease_rate)) +
+  geom_col(aes(x = month, y = change_rate)) +
   facet_wrap(.~city, nrow = 1)
 p3 <- ggplot(change_obsperuser_monthly) +
   geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
@@ -202,6 +210,82 @@ covid_monthly$prefecture <-
 p4 <- ggplot(covid_monthly) + geom_col(aes(x = month, number)) +
   facet_wrap(.~prefecture, nrow = 1, scales = "free_y")
 p1 / p2 / p3 / p4
+
+# 测试：时间序列相关？
+# 分别分析了每月感染者人数和总观测数以及活跃用户数的关系
+
+# 每月感染者数和观测数的关系
+# 合并观测数和新冠数据
+# 给新冠数据添加城市信息
+covid_monthly <-
+  merge(covid_monthly, pre_city, by.x = "prefecture", by.y = "prefecture_en")
+# 合并活跃用户数据和新冠数据
+change_monthly <-
+  merge(change_monthly, covid_monthly,
+        by = c("city", "month"), by.y = c("city_en", "month"))
+par(mfrow = c(3, 3))
+for (i in tar_city) {
+  plot(change_monthly[change_monthly$city == i, ]$number,
+       change_monthly[change_monthly$city == i, ]$change_rate)
+}
+
+# 不分城市
+cor(change_monthly$number, change_monthly$change_rate, method = "pearson")
+cor.test(change_monthly$number, change_monthly$change_rate, method = "pearson")
+
+# 不同城市分组检测相关性
+for (i in tar_city) {
+  fit <- cor.test(change_monthly[change_monthly$city == i, ]$number,
+                  change_monthly[change_monthly$city == i, ]$change_rate)
+  cat(i, "\n",
+      cor(change_monthly[change_monthly$city == i, ]$number,
+          change_monthly[change_monthly$city == i, ]$change_rate), "\n",
+      fit$p.value, "\n")
+}
+# 分组检测相关性：2020年的绝对观测数量和新冠感染数？
+for (i in tar_city) {
+  fit <- cor.test(change_monthly[change_monthly$city == i, ]$number,
+                  change_monthly[change_monthly$city == i, ]$change_rate)
+  cat(i, "\n",
+      cor(change_monthly[change_monthly$city == i, ]$number,
+          change_monthly[change_monthly$city == i, ]$change_rate), "\n",
+      fit$p.value, "\n")
+}
+
+# 分析活跃用户数和新冠感染数
+# 合并活跃用户数据和新冠数据
+change_user_monthly <-
+  merge(change_user_monthly, covid_monthly,
+        by = c("city", "month"), by.y = c("city_en", "month"))
+par(mfrow = c(3, 3))
+for (i in tar_city) {
+  plot(change_user_monthly[change_user_monthly$city == i, ]$number,
+       change_user_monthly[change_user_monthly$city == i, ]$change_rate)
+}
+fit <- cor.test(change_user_monthly$number, change_user_monthly$change_rate, method = "pearson")
+cor(change_user_monthly$number, change_user_monthly$change_rate, method = "pearson")
+
+# 分组检测相关性
+for (i in tar_city) {
+  fit <- cor.test(change_user_monthly[change_user_monthly$city == i, ]$number,
+                  change_user_monthly[change_user_monthly$city == i, ]$change_rate)
+  cat(i, "\n",
+      cor(change_user_monthly[change_user_monthly$city == i, ]$number,
+          change_user_monthly[change_user_monthly$city == i, ]$change_rate), "\n",
+      fit$p.value, "\n")
+}
+# 分组检测相关性：2020年的绝对数量和新冠感染数？
+for (i in tar_city) {
+  fit <- cor.test(change_user_monthly[change_user_monthly$city == i, ]$number,
+                  change_user_monthly[change_user_monthly$city == i, ]$users.y)
+  cat(i, "\n",
+      cor(change_user_monthly[change_user_monthly$city == i, ]$number,
+          change_user_monthly[change_user_monthly$city == i, ]$change_rate), "\n",
+      fit$p.value, "\n")
+}
+
+# 结论：总体来说结果不显著。2019-2020观测数的变化率按城市分组检测还有些显著关系，其他的几个检测很少有显著关系。
+
 
 # 微观分析：追踪连续参与用户的变化 ----
 # 输出各用户每年的观测数宽表
