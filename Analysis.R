@@ -273,6 +273,7 @@ for (i in tar_city) {
 # 结论：正负相关均有，且少有显著关系
 
 # 微观分析：追踪连续参与用户的变化 ----
+## Observation of cont users ----
 # 输出各用户每年的观测数宽表
 fun_usertrack <- function(obs_user_year) {
   obs_user_year <- obs_user_year[c("user_login", "observed_on")]
@@ -369,6 +370,68 @@ p2 <- ggplot(contuser_all) + geom_col(aes(year, contusermoreprop)) +
 p1 / p2
 
 # 暂时的结论：大约一半的连续用户在2020年观测数比2019年多，当然这个数据也要和2018-2019年的变化量进行对比，比如从连续用户总数和连续用户中观测数增长者的占比的对比可以看出，虽然2019-2020很多城市的连续用户数上升了，但是比例却下降了，可能也反映了新冠的影响，就是说有更多人在2020年持续上传观测，这可能是平台持续增长的体现，但是同时观测增加者的比例却下降了
+
+## Active days ----
+# 函数：生成年度活跃天数数据框
+# 输入单个城市的数据，输出各用户每月的活跃天数列表
+fun_usermth <- function(x) {
+  # 从日期中提取年月数据
+  x[, "observed_on"] <- as.Date(x[, "observed_on"])
+  x[, "year"] <- year(x[, "observed_on"])
+  x[, "month"] <- month(x[, "observed_on"])
+  x[, "day"] <- day(x[, "observed_on"])
+  # 活跃天数即每个月每个用户的活跃天数计数
+  x_output <- unique(x[c("user_id", "year", "month", "day")])
+  x_output <- aggregate(
+    x_output[, "user_id"],
+    by = list(x_output[, "user_id"], x_output[, "year"], x_output[, "month"]),
+    FUN = "length")
+  names(x_output) <- c("user_id", "year", "month", "act_days")
+  return(x_output)
+}
+
+# 将多城市数据合并为一个数据框
+fun_ls2df <- function(x) {
+  # 给列表中每个元素数据框加上对应的元素名
+  for (i in names(x)) {
+    x[[i]][, "city"] <- i
+  }
+  x <- Reduce(rbind, x)
+  colnames_x <- c("city", names(x)[!names(x) %in% "city"])
+  x <- x[colnames_x]
+  return(x)
+}
+
+usermth <- fun_ls2df(lapply(record, fun_usermth))
+ggplot(usermth) + geom_line(aes(month, act_days, color = user_id)) +
+  facet_grid(year ~ city, scales = "free")
+
+# 挑出2019-2020连续用户
+contuser <- usermth[which(usermth$year %in% c(2019, 2020)), ]
+contuser <- unique(contuser[c("city", "user_id", "year")])
+contuser$value <- 1
+contuser <- dcast(contuser, city + user_id ~ year, value.var = "value")
+contuser$cont_value <- contuser$`2019` + contuser$`2020`
+contuser$contuser <- "non_cont"
+contuser$contuser[which(contuser$cont_value == 2)] <- "cont"
+comment(contuser) <- "2019-2020连续用户列表"
+
+# 合并连续用户列表并保留2019和2020年数据
+usermth <- merge(usermth, contuser[c("city", "user_id", "contuser")],
+                 by = c("city", "user_id"))
+usermth <- usermth[which(usermth$year %in% c(2019, 2020)), ]
+usermth$month <- as.factor(usermth$month)
+ggplot(usermth[which(usermth$year == 2020), ]) +
+  geom_boxplot(aes(contuser, act_days, color = contuser)) +
+  facet_wrap(.~ city, scales = "free_y")
+
+for (i in tar_city) {
+  print(i)
+  print(summary(aov(act_days ~ contuser,
+                    data = usermth[which(usermth$city == i & usermth$year == 2020), ])))
+}
+
+# 结论：实际上2019和2020年，连续用户的活跃天数都大于非连续用户数。要如何比较两年的两组差异呢？是否可以比较两者的连续用户平均值和非连续用户平均值？
 
 # 老用户行为和其他用户对比
 # 老用户的观测数是否显著高于其他人？
