@@ -211,6 +211,66 @@ p4 <- ggplot(covid_monthly) + geom_col(aes(x = month, number)) +
   facet_wrap(.~prefecture, nrow = 1, scales = "free_y")
 p1 / p2 / p3 / p4
 
+## 环比变化率~新冠感染数 ----
+# 2020年每个月环比相比于2019年对应环比的变化率和新冠感染数的关系？
+fun_seqchg <- function(x) {
+  # 更改输入数据的月份为数字格式后按照城市、年、月排序
+  x$month <- as.numeric(x$month)
+  x <- x[order(x$city, x$year, x$month), ]
+  # 新建一列时间步长差一个月的数据并计算环比
+  x$pre <- c(NA, x$user[1: length(x$year)-1])
+  x$seqchg <- (x$user - x$pre) / x$pre
+  return(x)
+}
+
+mthseqchg <- fun_seqchg(record_user_monthly)
+ggplot(mthseqchg[which(mthseqchg$year %in% c(2019, 2020)), ]) +
+  geom_line(aes(month, seqchg, color = year)) +
+  facet_wrap(.~ city, scales = "free_y")
+# 结论：视觉上看并无明显规律，但上半年似乎影响较大，本来环比增长较多的月份在2020年环比增长较少
+
+# 再看看两年环比变化率和新冠感染数的关系
+covid_monthly <-
+  merge(covid_monthly, pre_city, by.x = "prefecture", by.y = "prefecture_en")
+
+fun_seqchg_chg_2019_2020 <- function(x) {
+  # 更改输入数据的月份为数字格式后按照城市、年、月排序
+  x$month <- as.numeric(x$month)
+  x <- x[order(x$city, x$year, x$month), ]
+  # 新建一列时间步长差一个月的数据并计算环比
+  x$pre <- c(NA, x$user[1: length(x$year)-1])
+  x$seqchg <- (x$user - x$pre) / x$pre
+  # 计算2019-2020环比变化率
+  x_output <-
+    merge(x[which(x$year == "2019"), ],
+          x[which(x$year == "2020"), ],
+          by = c("city", "month"))
+  x_output$seqchg_chg <-
+    (x_output$pre.y - x_output$pre.x) /
+    x_output$pre.x
+  return(x_output)
+}
+mthseqchg_chg <- fun_seqchg_chg_2019_2020(record_user_monthly)
+
+# 合并环比变化率数据和新冠感染数据
+mthseqchg_chg <-
+  merge(mthseqchg_chg, covid_monthly,
+        by.x = c("city", "month"), by.y = c("city_en", "month"))
+# 区分上下半年
+mthseqchg_chg$phase <- "before"
+mthseqchg_chg$phase[which(mthseqchg_chg$month > 6)] <- "after"
+ggplot(mthseqchg_chg) + geom_point(aes(seqchg_chg, number, color = phase), alpha = 0.5) +
+  facet_wrap(.~ city, scales = "free")
+# 查看相关性分析统计结果
+for (i in tar_city) {
+  fit <- cor.test(mthseqchg_chg[mthseqchg_chg$city == i, ]$number,
+                  mthseqchg_chg[mthseqchg_chg$city == i, ]$users.y)
+  cat(i, "\n",
+      cor(mthseqchg_chg[mthseqchg_chg$city == i, ]$seqchg_chg,
+          mthseqchg_chg[mthseqchg_chg$city == i, ]$number), "\n",
+      fit$p.value, "\n")
+}
+# 结论：正负相关均有，且少有显著关系
 
 # 微观分析：追踪连续参与用户的变化 ----
 # 输出各用户每年的观测数宽表
