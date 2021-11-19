@@ -371,10 +371,10 @@ p1 / p2
 
 # 暂时的结论：大约一半的连续用户在2020年观测数比2019年多，当然这个数据也要和2018-2019年的变化量进行对比，比如从连续用户总数和连续用户中观测数增长者的占比的对比可以看出，虽然2019-2020很多城市的连续用户数上升了，但是比例却下降了，可能也反映了新冠的影响，就是说有更多人在2020年持续上传观测，这可能是平台持续增长的体现，但是同时观测增加者的比例却下降了
 
-## Active days of cont user ----
-# 函数：生成年度活跃天数数据框
+## Active days by city ----
+# 函数：生成年度和月度活跃天数数据框
 # 输入单个城市的数据，输出各用户每月的活跃天数列表
-fun_usermth <- function(x) {
+fun_actdays <- function(x, dur = "month", tarfun = "sum") {
   # 从日期中提取年月数据
   x[, "observed_on"] <- as.Date(x[, "observed_on"])
   x[, "year"] <- year(x[, "observed_on"])
@@ -387,6 +387,13 @@ fun_usermth <- function(x) {
     by = list(x_output[, "user_id"], x_output[, "year"], x_output[, "month"]),
     FUN = "length")
   names(x_output) <- c("user_id", "year", "month", "act_days")
+  if (dur == "year") {
+    # 活跃天数即月度活跃天数的汇总加和
+    x_output <- aggregate(
+      x_output[, "act_days"],
+      by = list(x_output[, "year"]), FUN = tarfun)
+    names(x_output) <- c("year", "act_days")
+  }
   return(x_output)
 }
 
@@ -402,9 +409,23 @@ fun_ls2df <- function(x) {
   return(x)
 }
 
-usermth <- fun_ls2df(lapply(record, fun_usermth))
+# 各城市年度总活跃天数变化
+useryr <- fun_ls2df(lapply(record, fun_actdays, dur = "year"))
+ggplot(useryr) + geom_line(aes(year, act_days)) +
+  facet_wrap(.~ city, scales = "free_y")
+# 结论：一半的城市在2020年均出现活跃天数下降的情况
+
+# 各城市年度人均活跃天数变化
+useryr <- fun_ls2df(lapply(record, fun_actdays, dur = "year", tarfun = "mean"))
+ggplot(useryr) + geom_line(aes(year, act_days)) +
+  facet_wrap(.~ city, scales = "free_y")
+# 结论：只有两个城市在2020年出现下降，所以总活跃天数的下降可能是由于总活跃用户人数下降导致的
+
+## Active days of cont user ----
+usermth <- fun_ls2df(lapply(record, fun_actdays))
 ggplot(usermth) + geom_line(aes(month, act_days, color = user_id)) +
   facet_grid(year ~ city, scales = "free")
+
 
 # 挑出2019-2020连续用户
 contuser <- usermth[which(usermth$year %in% c(2019, 2020)), ]
