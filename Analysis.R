@@ -433,6 +433,69 @@ for (i in tar_city) {
 
 # 结论：实际上2019和2020年，连续用户的活跃天数都大于非连续用户数。要如何比较两年的两组差异呢？是否可以比较两者的连续用户平均值和非连续用户平均值？
 
+
+# 解决办法：比较2019年和2020年连续用户表现之间的差异，和非连续用户之间的差异
+# 函数：挑选任意两年连续用户列表
+# 输入包含年份的用户数据和目标年份，自动生成该年份和前一年都有上传记录的用户
+# 用户数据应当包括：city, user_id, year
+fun_contuser <- function(x, taryear) {
+  contuser <- x[which(x$year %in% c(taryear-1, taryear)), ]
+  contuser <- unique(contuser[c("city", "user_id", "year")])
+  contuser$value <- 1
+  contuser <- dcast(contuser, city + user_id ~ year, value.var = "value")
+  contuser$cont_value <-
+    contuser[, paste(taryear - 1)] + contuser[, paste(taryear)]
+  contuser <- contuser$user_id[which(contuser$cont_value == 2)]
+  return(contuser)
+}
+
+usermth <- fun_ls2df(lapply(record, fun_usermth))
+
+usermth_cont2019 <- usermth
+usermth_cont2019$contuser <- "non_cont2019"
+usermth_cont2019$contuser[which(
+  usermth_cont2019$user_id %in% fun_contuser(usermth_cont2019, 2019))] <-
+  "cont2019"
+
+usermth_cont2020 <- usermth
+usermth_cont2020$contuser <- "non_cont2020"
+usermth_cont2020$contuser[which(
+  usermth_cont2020$user_id %in% fun_contuser(usermth_cont2020, 2020))] <-
+  "cont2020"
+
+# 对比2019和2020年连续用户活跃天数差异
+usermth_cont_2019_2020 <-
+  rbind(usermth_cont2019[which(usermth_cont2019$contuser == "cont2019"), ],
+        usermth_cont2020[which(usermth_cont2020$contuser == "cont2020"), ])
+ggplot(usermth_cont_2019_2020) +
+  geom_boxplot(aes(contuser, act_days)) +
+  facet_wrap(.~ city, scales = "free_y")
+# 按城市分组做统计检验
+for (i in tar_city) {
+  print(i)
+  print(summary(
+    aov(act_days ~ contuser,
+        data = usermth_cont_2019_2020[which(usermth_cont_2019_2020$city == i), ])))
+}
+# 结论：2019的连续用户和2020年的连续用户活跃天数并无差异
+
+# 对比2019和2020年非连续用户活跃天数差异
+usermth_noncont_2019_2020 <-
+  rbind(usermth_cont2019[which(usermth_cont2019$contuser == "non_cont2019"), ],
+        usermth_cont2020[which(usermth_cont2020$contuser == "non_cont2020"), ])
+ggplot(usermth_noncont_2019_2020) +
+  geom_boxplot(aes(contuser, act_days)) +
+  facet_wrap(.~ city, scales = "free_y")
+# 按城市分组做统计检验
+for (i in tar_city) {
+  print(i)
+  print(summary(
+    aov(act_days ~ contuser,
+        data = usermth_noncont_2019_2020[which(usermth_noncont_2019_2020$city == i), ])))
+}
+# 结论：东京和横滨的非连续用户在2020年有显著下降
+
+
 # 老用户行为和其他用户对比
 # 老用户的观测数是否显著高于其他人？
 # 挑出老用户
