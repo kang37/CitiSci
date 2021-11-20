@@ -5,11 +5,11 @@ library(reshape2)
 library(openxlsx)
 
 # 读取数据 ----
-# 读取目标县名和城市名对应文件
+## Prefectures and cities ----
 pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx")
 pre_city <- pre_city[is.na(pre_city$city_en) == FALSE, ]
 
-# names of the raw data files
+## Raw iNaturalist data ----
 filenames <- list.files("RawData/iNatData")
 filenames <- grep(".csv", filenames, value = TRUE)
 
@@ -19,7 +19,38 @@ names(record) <- gsub(".csv", "", filenames)
 
 for (i in 1:length(filenames)) {
   record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i]))
+  # 生成年月日数据
+  record[[i]][, "observed_on"] <- as.Date(record[[i]][, "observed_on"])
+  record[[i]][, "year"] <- year(record[[i]][, "observed_on"])
+  record[[i]][, "month"] <- month(record[[i]][, "observed_on"])
+  record[[i]][, "day"] <- day(record[[i]][, "observed_on"])
+  # 由于有些城市只有2016年及之后的数据，所以就保留共同数据
+  record[[i]] <- subset(record[[i]], year > 2015)
 }
+
+## COVID-19 data ----
+# 基本上从二月~四月开始受影响
+# 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
+# 各县感染者数量
+covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv")
+covid <- covid[c("日付", "都道府県名", "各地の感染者数_1日ごとの発表数")]
+names(covid) <- c("date", "prefecture", "number")
+
+covid <-
+  covid[which(covid$prefecture %in% pre_city$prefecture_jp), ]
+covid <- merge(covid, pre_city, by.x = "prefecture", by.y = "prefecture_jp")
+
+covid$date <- as.Date(covid$date)
+covid[, "year"] <- year(covid$date)
+covid[, "month"] <- month(covid$date)
+covid <- covid[which(covid$year == "2020"), ]
+
+covid_monthly <- aggregate(covid$number, by = list(covid$prefecture_en, covid$month),
+                           FUN = "sum")
+names(covid_monthly) <- c("prefecture", "month", "number")
+# 权宜之计：按照从北到南对城市进行排序
+covid_monthly$prefecture <-
+  factor(covid_monthly$prefecture, levels = unique(pre_city$prefecture_en))
 
 # 年度分析 ----
 # 函数：汇总计算记录数、活跃用户数、活跃天数等数据
@@ -185,31 +216,6 @@ p3 <- ggplot(change_obsperuser_monthly) +
             fill = "light blue") +
   geom_col(aes(x = month, y = decrease_rate)) +
   facet_wrap(.~city, nrow = 1)
-
-
-# 紧急事态和疫情情况分析
-# 基本上从二月~四月开始受影响
-# 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
-# 各县感染者数量
-covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv")
-covid <- covid[c("日付", "都道府県名", "各地の感染者数_1日ごとの発表数")]
-names(covid) <- c("date", "prefecture", "number")
-
-covid <-
-  covid[which(covid$prefecture %in% pre_city$prefecture_jp), ]
-covid <- merge(covid, pre_city, by.x = "prefecture", by.y = "prefecture_jp")
-
-covid$date <- as.Date(covid$date)
-covid[, "year"] <- year(covid$date)
-covid[, "month"] <- month(covid$date)
-covid <- covid[which(covid$year == "2020"), ]
-
-covid_monthly <- aggregate(covid$number, by = list(covid$prefecture_en, covid$month),
-                           FUN = "sum")
-names(covid_monthly) <- c("prefecture", "month", "number")
-# 权宜之计：按照从北到南对城市进行排序
-covid_monthly$prefecture <-
-  factor(covid_monthly$prefecture, levels = unique(pre_city$prefecture_en))
 
 p4 <- ggplot(covid_monthly) + geom_col(aes(x = month, number)) +
   facet_wrap(.~prefecture, nrow = 1, scales = "free_y")
