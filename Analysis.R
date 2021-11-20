@@ -22,114 +22,118 @@ for (i in 1:length(filenames)) {
 }
 
 # 年度分析 ----
-# 比较年度观察总数，观察者数量，人均观察数
-# 统计观察总数
-fun_yearly <- function(x) {
-  x[, "year"] <- year(as.Date(x[, "observed_on"]))
-  x_yearly <- aggregate(x[, "year"], by = list(x[, "year"]), FUN = "length")
-  names(x_yearly) <- c("year", "observation")
-  return(x_yearly)
+# 函数：汇总计算记录数、活跃用户数、活跃天数等数据
+# 输入数据框：日期、user_id等信息
+fun_smrydata <- function(x, dur = "month") {
+  # 从日期中提取年月数据
+  x[, "observed_on"] <- as.Date(x[, "observed_on"])
+  x[, "year"] <- year(x[, "observed_on"])
+  x[, "month"] <- month(x[, "observed_on"])
+  x[, "day"] <- day(x[, "observed_on"])
+
+  x$year <- factor(x$year)
+  x$day <- factor(x$day)
+
+  if (dur == "month") {
+    # 记录数即每个月的数据记录条数
+    x_obs <- aggregate(
+      x[, "observed_on"], by = list(x$year, x$month), FUN = "length"
+    )
+    names(x_obs) <- c("year", "month", "obs")
+    # 用户数即每个月的不重复用户数
+    x_users <- unique(x[c(c("year", "month", "user_id"))])
+    x_users <- aggregate(
+      x_users[, "user_id"],
+      by = list(x_users$year, x_users$month), FUN = "length"
+    )
+    names(x_users) <- c("year", "month", "users")
+    # 活跃天数即每个月的各用户的活跃天数之和
+    x_actdays <- unique(x[c("user_id", "year", "month", "day")])
+    x_actdays <- aggregate(
+      x_actdays[, "user_id"],
+      by = list(x_actdays$year, x_actdays$month), FUN = "length")
+    names(x_actdays) <- c("year", "month", "act_days")
+    # 输出结果：默认根据year和month进行merge
+    x_output <- Reduce(merge, list(x_obs, x_users, x_actdays))
+
+    # 计算人均记录数、人均活跃天数、人均日均记录数
+    x_output$obs_per_user <- x_output$obs / x_output$users
+    x_output$actdays_per_user <- x_output$act_days / x_output$users
+    x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
+  }
+
+  # 按年度进行数据汇总计算
+  if (dur == "year") {
+    # 年度记录数
+    x_obs <- aggregate(x[, "observed_on"], by = list(x$year), FUN = "length")
+    names(x_obs) <- c("year", "obs")
+    # 用户数即每个月的不重复用户数
+    x_users <- unique(x[c(c("year", "user_id"))])
+    x_users <- aggregate(
+      x_users[, "user_id"], by = list(x_users$year), FUN = "length"
+    )
+    names(x_users) <- c("year", "users")
+    # 活跃天数即每个月的各用户的活跃天数之和
+    x_actdays <- unique(x[c("user_id", "year", "day")])
+    x_actdays <- aggregate(
+      x_actdays[, "user_id"],
+      by = list(x_actdays$year), FUN = "length")
+    names(x_actdays) <- c("year", "act_days")
+    # 输出结果：默认根据year进行merge
+    x_output <- Reduce(merge, list(x_obs, x_users, x_actdays))
+
+    # 计算人均记录数、人均活跃天数、人均日均记录数
+    x_output$obs_per_user <- x_output$obs / x_output$users
+    x_output$actdays_per_user <- x_output$act_days / x_output$users
+    x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
+  }
+  return(x_output)
 }
 
-record_yearly <- lapply(record, fun_yearly)
-for (i in names(record_yearly)) {
-  record_yearly[[i]][, "city"] <- i
+# 函数：按照列名批量生成图片并存储在列表中
+fun_plot <- function(x, var_ls, dur = "month") {
+  # 构建存放图片的列表
+  plot_ls <- vector("list", length(var_ls))
+  names(plot_ls) <- var_ls
+
+  # 循环作图并存储
+  if (dur == "month") {
+    for (i in var_ls) {
+      plot_ls[[i]] <- ggplot(x) +
+        geom_line(aes_string("month", i, color = "year")) +
+        scale_color_manual(values = c("2019" = "#00AF64", "2020" = "#bf5930")) +
+        facet_wrap(.~ city, nrow = 1, scales = "free")
+    }
+  } else if (dur == "year") {
+    for (i in var_ls) {
+      plot_ls[[i]] <- ggplot(x) +
+        geom_line(aes_string("year", i)) +
+        facet_wrap(.~ city, nrow = 1, scales = "free")
+    }
+  }
+  return(plot_ls)
 }
-record_yearly <- Reduce(rbind, record_yearly)
 
-# 统计观察者数量
-fun_user_yearly <- function(x) {
-  x[, "year"] <- year(as.Date(x[, "observed_on"]))
-  x_user_yearly <- unique(x[c("year", "user_id")])
-  x_user_yearly <- aggregate(x_user_yearly[, "year"],
-                             by = list(x_user_yearly[, "year"]), FUN = "length")
-  names(x_user_yearly) <- c("year", "users")
-  return(x_user_yearly)
-}
+tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year"))
+tot_yrdata$year <- as.numeric(tot_yrdata$year)
 
-record_user_yearly <- lapply(record, fun_user_yearly)
-for (i in names(record_user_yearly)) {
-  record_user_yearly[[i]][, "city"] <- i
-}
-record_user_yearly <- Reduce(rbind, record_user_yearly)
-
-# 人均观察数
-record_obsperuser_yearly <-
-  merge(record_yearly, record_user_yearly, by = c("year", "city"))
-record_obsperuser_yearly$obsperuser <-
-  record_obsperuser_yearly$observation / record_obsperuser_yearly$users
-
-# plots
-p1 <- ggplot(record_yearly) + geom_line(aes(year, observation)) +
-  facet_wrap(.~ city, nrow = 1, scales = "free_y")
-p2 <- ggplot(record_user_yearly) + geom_line(aes(year, users)) +
-  facet_wrap(.~ city, nrow = 1, scales = "free_y")
-p3 <- ggplot(record_obsperuser_yearly) + geom_line(aes(year, obsperuser)) +
-  facet_wrap(.~ city, nrow = 1, scales = "free_y")
-p1 / p2 / p3
+plot_ls <- fun_plot(tot_yrdata,
+                    var_ls = c("obs", "users", "act_days", "obs_per_user",
+                               "actdays_per_user", "obs_pu_pd"), dur = "year")
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
 # 月度数据比较
-# 每月观察总数
-fun_monthly <- function(x) {
-  x[, "year"] <- year(as.Date(x[, "observed_on"]))
-  x[, "month"] <- month(as.Date(x[, "observed_on"]))
-  x_monthly <- aggregate(x[, "month"], by = list(x[, "year"], x[, "month"]),
-                         FUN = "length")
-  names(x_monthly) <- c("year", "month", "observation")
-  x_monthly[, "year"] <- as.factor(x_monthly[, "year"])
-  return(x_monthly)
-}
+tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata))
 
-record_monthly <- lapply(record, fun_monthly)
-for (i in names(record_monthly)) {
-  record_monthly[[i]][, "city"] <- i
-}
+# 各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化
+tot_mthdata_1920 <- subset(tot_mthdata, year %in% c(2019, 2020))
 
-record_monthly <- Reduce(rbind, record_monthly)
-# 限定为2018年之后的数据
-record_monthly <-
-  record_monthly[which(record_monthly$year %in% c("2018", "2019", "2020")), ]
-
-# 月度分析 ----
-# 每月观察者数量
-fun_user_monthly <- function(x) {
-  x[, "year"] <- year(as.Date(x[, "observed_on"]))
-  x[, "month"] <- month(as.Date(x[, "observed_on"]))
-  x_user_monthly <- unique(x[c("year", "month", "user_id")])
-  x_user_monthly <-
-    aggregate(x_user_monthly[, "month"],
-              by = list(x_user_monthly[, "year"], x_user_monthly[, "month"]),
-              FUN = "length")
-  names(x_user_monthly) <- c("year", "month", "users")
-  x_user_monthly[, "year"] <- as.factor(x_user_monthly[, "year"])
-  return(x_user_monthly)
-}
-
-record_user_monthly <- lapply(record, fun_user_monthly)
-for (i in names(record_user_monthly)) {
-  record_user_monthly[[i]][, "city"] <- i
-}
-
-record_user_monthly <- Reduce(rbind, record_user_monthly)
-record_user_monthly <-
-  record_user_monthly[which(record_user_monthly$year %in% c("2018", "2019", "2020")), ]
-
-# 人均观察数
-record_obsperuser_monthly <-
-  merge(record_monthly, record_user_monthly, by = c("year", "month", "city"))
-record_obsperuser_monthly$obsperuser <-
-  record_obsperuser_monthly$observation / record_obsperuser_monthly$users
-
-p1 <- ggplot(record_monthly) +
-  geom_line(aes(x = month, y = observation, color = year)) +
-  facet_wrap(.~ city, nrow = 1, scales = "free_y")
-p2 <- ggplot(record_user_monthly) +
-  geom_line(aes(x = month, y = users, color = year)) +
-  facet_wrap(.~ city, nrow = 1, scales = "free_y")
-p3 <- ggplot(record_obsperuser_monthly) +
-  geom_line(aes(x = month, y = obsperuser, color = year)) +
-  facet_wrap(.~ city, nrow = 1, scales = "free_y")
-p1 / p2 / p3
+plot_ls <- fun_plot(tot_mthdata_1920,
+                    var_ls = c("obs", "users", "act_days", "obs_per_user",
+                               "actdays_per_user", "obs_pu_pd"))
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
 # 2020年相比2019年每月下降多少
 tar_city <- names(record)
