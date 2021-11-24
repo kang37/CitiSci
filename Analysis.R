@@ -154,6 +154,37 @@ plot_ls <- fun_plot(tot_yrdata,
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
+# 报告分析
+# 2020年出现下降的城市
+rep_tot_yrdata <- subset(tot_yrdata, year > 3)
+# 函数：对比各城市2019和2020年的数据
+# 输入：各城市各年份各项指标数值数据框
+# 输出：对于各指标2020低于2019的城市个数并可视化
+fun_comp1920 <- function(x) {
+  # 将数据分成2019和2020两部分并且按照城市排序
+  x1 <- subset(x, year == 4)
+  x1 <- x1[order(x1$city), ]
+  x2 <- subset(x, year == 5)
+  x2 <- x2[order(x2$city), ]
+
+  # 计算各项数值的差异
+  # 如果2020年比2019年高则判断为TRUE
+  x <- cbind(city = x1$city,
+             x2[names(x2)[!names(x2) %in% c("city", "year")]] /
+               x1[names(x1)[!names(x1) %in% c("city", "year")]] > 1)
+  x <- as.data.frame(x)
+
+  # 输出各项指标2020低于2019的城市数
+  print(apply(x[names(x)[!names(x) %in% c("city", "year")]], 2,
+              function(y) {sum(y == FALSE)}))
+
+  # 转化成长数据并作图
+  x <- melt(x, id = "city")
+  ggplot(x) + geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5)
+}
+
+fun_comp1920(tot_yrdata)
+
 # 月度数据比较
 tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata))
 
