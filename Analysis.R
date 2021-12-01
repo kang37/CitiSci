@@ -124,6 +124,18 @@ fun_smrydata <- function(x, dur = "month") {
   return(x_output)
 }
 
+# 将多城市数据合并为一个数据框
+fun_ls2df <- function(x) {
+  # 给列表中每个元素数据框加上对应的元素名
+  for (i in names(x)) {
+    x[[i]][, "city"] <- i
+  }
+  x <- Reduce(rbind, x)
+  colnames_x <- c("city", names(x)[!names(x) %in% "city"])
+  x <- x[colnames_x]
+  return(x)
+}
+
 # 函数：按照列名批量生成图片并存储在列表中
 fun_plot <- function(x, var_ls, dur = "month") {
   # 构建存放图片的列表
@@ -470,18 +482,6 @@ fun_actdays <- function(x, dur = "month", tarfun = "sum") {
     names(x_output) <- c("year", "act_days")
   }
   return(x_output)
-}
-
-# 将多城市数据合并为一个数据框
-fun_ls2df <- function(x) {
-  # 给列表中每个元素数据框加上对应的元素名
-  for (i in names(x)) {
-    x[[i]][, "city"] <- i
-  }
-  x <- Reduce(rbind, x)
-  colnames_x <- c("city", names(x)[!names(x) %in% "city"])
-  x <- x[colnames_x]
-  return(x)
 }
 
 # 各城市年度总活跃天数变化
