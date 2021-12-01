@@ -4,7 +4,7 @@ library(patchwork)
 library(reshape2)
 library(openxlsx)
 
-# 读取数据 ----
+# Read data ----
 ## Prefectures and cities ----
 pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx")
 pre_city <- pre_city[is.na(pre_city$city_en) == FALSE, ]
@@ -51,8 +51,11 @@ names(covid_monthly) <- c("prefecture", "month", "number")
 # 权宜之计：按照从北到南对城市进行排序
 covid_monthly$prefecture <-
   factor(covid_monthly$prefecture, levels = unique(pre_city$prefecture_en))
+# 合并城市所属县的数据
+covid_monthly <-
+  merge(covid_monthly, pre_city, by.x = "prefecture", by.y = "prefecture_en")
 
-# 年度分析 ----
+# Annual comparison ----
 # 函数：汇总计算记录数、活跃用户数、活跃天数等数据
 # 输入数据框：日期、user_id等信息
 fun_smrydata <- function(x, dur = "month") {
@@ -185,133 +188,164 @@ fun_comp1920 <- function(x) {
 
 fun_comp1920(tot_yrdata)
 
-# 月度数据比较
-tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata))
+# Monthly comparison ----
+## General comparison of 2019-2020 ----
+# 构建各年份月度数据
+tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "month"))
 
-# 各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化
+# 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
 tot_mthdata_1920 <- subset(tot_mthdata, year %in% c(2019, 2020))
-
 plot_ls <- fun_plot(tot_mthdata_1920,
                     var_ls = c("obs", "users", "act_days", "obs_per_user",
                                "actdays_per_user", "obs_pu_pd"))
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
-# 2020年相比2019年每月下降多少
-tar_city <- names(record)
+## Varieties of idx vs. covid data ----
+# 2019-2020每月同比变化
+# 函数：计算2020年每月相比上年相同月份的变化率
+# 输入：各城市各年月的各项指标数据
+# 输出：各城市各年月的各项指标相比去年同期的变化率
+fun_mthchange_1920 <- function(x) {
+  # 分别构建2019年和2020年的数据框
+  x_2019 <- subset(x, year == 2019)
+  x_2019 <- x_2019[, -grep("year", names(x_2019))]
+  x_2019 <- x_2019[order(x_2019$city, x_2019$month), ]
+  x_2020 <- subset(x, year == 2020)
+  x_2020 <- x_2020[, -grep("year", names(x_2020))]
+  x_2020 <- x_2020[order(x_2020$city, x_2020$month), ]
 
-fun_mthchange_2019_2020 <- function(x, name_var) {
-  change_monthly <-
-    merge(x[which(x$year == "2019"), ],
-          x[which(x$year == "2020"), ],
-          by = c("city", "month"))
   # 计算2020年相对于2019年的变化率
-  change_monthly[, "change_rate"] <-
-    (change_monthly[, paste0(name_var, ".y")] -
-       change_monthly[, paste0(name_var, ".x")]) /
-    change_monthly[, paste0(name_var, ".x")]
-  # 留下目标城市的数据
-  change_monthly <- change_monthly[which(change_monthly$city %in% tar_city), ]
-  return(change_monthly)
+  x_mthchg <- cbind(
+    x_2019[c("city", "month")],
+    (x_2020[names(x_2020)[!names(x_2020) %in% c("city", "month")]] -
+       x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]) /
+       x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]
+  )
+
+  # 输出数据
+  return(x_mthchg)
 }
 
-change_monthly <- fun_mthchange_2019_2020(record_monthly, "observation")
+# 函数：可视化各项指标2019-2020年差异的各月变化及与新冠的关系
+# 输入：各城市各年月的各项指标2019-2020年变化率数据，新冠月度数据
+# 输出：可视化各月数据变化，及与新冠相关性图
+fun_plot_mthchg1920_covid <- function(x) {
+  x_lng <- melt(x, id = c("city", "month"))
+  # 可视化各月数据变化
+  p1 <- ggplot(x_lng) +
+    geom_line(aes(month, value)) +
+    facet_grid(variable ~ city, scales = "free")
+  print(p1)
+  # 2019-2020各指标变化率与新冠相关性图
+  x_lng <- merge(x_lng, covid_monthly,
+                 by.x = c("city", "month"), by.y = c("city_en", "month"))
+  p2 <- ggplot(x_lng) +
+    geom_point(aes(number, value), alpha = 0.4) +
+    facet_grid(variable ~ city, scales = "free")
+  print(p2)
+}
 
-change_user_monthly <- fun_mthchange_2019_2020(record_user_monthly, "users")
-# 按照从北到南对城市进行排序
-change_user_monthly$city <-
-  factor(change_user_monthly$city, levels = pre_city$city_en)
+# 统计检验函数
+# 函数：检验各城市2020年各月不同指标数据和对应新冠感染数的相关关系
+# 输入：各城市2020年各月不同指标数据数据框，各城市2020各月新冠感染数数据框
+# 输出：各城市2020年各月不同指标和新冠感染数相关关系的p值数据
+fun_corcovid <- function(x, covid_df) {
+  # 生成空结果列表用于存储计算结果
+  x_output_ls <- vector("list", 11)
+  names(x_output_ls) <- unique(x$city)
 
-change_obsperuser_monthly <-
-  fun_mthchange_2019_2020(record_obsperuser_monthly, "obsperuser")
-# 按照从北到南对城市进行排序
-change_obsperuser_monthly$city <-
-  factor(change_obsperuser_monthly$city, levels = pre_city$city_en)
+  tar_var <- names(x)[!names(x) %in% c("city", "year", "month")]
+  for (i in names(record)) {
+    x_output_ls[[i]] <-
+      apply(subset(x, city == i)[tar_var], 2,
+            function(y) {
+              cor.test(y, subset(x_covid, city == i,
+                                 select = "number")$number)$p.value})
+  }
+  # 将结果列表转化为数据框形式
+  x_output <- Reduce(rbind, x_output_ls)
+  x_output <- as.data.frame(x_output)
+  rownames(x_output) <- NULL
+  x_output$city <- names(x_output_ls)
+  x_output <- x_output[c("city", tar_var)]
+  # 转化为二元数据：判断p值是否小于0.05
+  x_output <-
+    cbind(city = x_output$city,
+          subset(x_output, select = names(x_output)[
+            !names(x_output) %in% "city"]) < 0.05)
+  x_output <- as.data.frame(x_output)
+  # 作图可视化各指标和新冠感染数相关的城市有几个
+  ggplot(melt(x_output, id = c("city"))) +
+    geom_tile(aes(city, variable, fill = value), alpha = 0.6)
+}
 
-change_monthly$month <- as.numeric(change_monthly$month)
-# 按照从北到南对城市进行排序
-change_monthly$city <- factor(change_monthly$city, levels = pre_city$city_en)
-
-p1 <- ggplot(change_monthly) +
-  geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
-            fill = "light blue") +
-  geom_col(aes(x = month, y = decrease_rate)) +
-  facet_wrap(.~city, nrow = 1, scales = "free_y")
-p2 <- ggplot(change_user_monthly) +
-  geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
-            fill = "light blue") +
-  geom_col(aes(x = month, y = change_rate)) +
-  facet_wrap(.~city, nrow = 1)
-p3 <- ggplot(change_obsperuser_monthly) +
-  geom_rect(aes(xmin = 3.5, xmax = 5.5, ymin = -Inf, ymax = Inf),
-            fill = "light blue") +
-  geom_col(aes(x = month, y = decrease_rate)) +
-  facet_wrap(.~city, nrow = 1)
-
-p4 <- ggplot(covid_monthly) + geom_col(aes(x = month, number)) +
-  facet_wrap(.~prefecture, nrow = 1, scales = "free_y")
-p1 / p2 / p3 / p4
+# 每月各项变化
+tot_mthdata_chg_1920 <- fun_mthchange_1920(tot_mthdata)
+fun_plot_mthchg1920_covid(tot_mthdata_chg_1920)
+fun_corcovid(x = tot_mthdata_chg_1920, covid_df = covid_monthly)
 
 ## 环比变化率~新冠感染数 ----
-# 2020年每个月环比相比于2019年对应环比的变化率和新冠感染数的关系？
-fun_seqchg <- function(x) {
-  # 更改输入数据的月份为数字格式后按照城市、年、月排序
-  x$month <- as.numeric(x$month)
-  x <- x[order(x$city, x$year, x$month), ]
-  # 新建一列时间步长差一个月的数据并计算环比
-  x$pre <- c(NA, x$user[1: length(x$year)-1])
-  x$seqchg <- (x$user - x$pre) / x$pre
-  return(x)
-}
+# 函数：2019-2020年各项指标环比数据
+# 输入：各城市各年月的各项指标数据
+# 输出：各城市各年月的各项指标相比去年同期的变化率
+fun_seqchg_1920 <- function(x) {
+  # 构建所需数据的完整城市、年、月数据框
+  x_1920 <- data.frame(
+    city = rep(unique(x$city), each = 3*12),
+    year = rep(rep(c(2018:2020), each = 12), length(unique(x$city))),
+    month = rep(rep(1:12, 3), length(unique(x$city)))
+  )
+  # 将输入数据合并到该数据框
+  x_1920 <- merge(x_1920, x, by = c("city", "year", "month"), all.x = TRUE)
 
-mthseqchg <- fun_seqchg(record_user_monthly)
-ggplot(mthseqchg[which(mthseqchg$year %in% c(2019, 2020)), ]) +
-  geom_line(aes(month, seqchg, color = year)) +
-  facet_wrap(.~ city, scales = "free_y")
-# 结论：视觉上看并无明显规律，但上半年似乎影响较大，本来环比增长较多的月份在2020年环比增长较少
+  # 构建延迟数据列
+  funin_lag <- function(y) {
+    c(NA, y[1: (length(y) - 1)])
+  }
+  x_1920_pre <- as.data.frame(
+    apply(x_1920[names(x_1920)[!names(x_1920) %in% c("city", "year", "month")]],
+          2, funin_lag))
+  x_1920_pre <- cbind(
+    city = x_1920$city,
+    year = x_1920$year,
+    month = x_1920$month,
+    x_1920_pre
+  )
 
-# 再看看两年环比变化率和新冠感染数的关系
-covid_monthly <-
-  merge(covid_monthly, pre_city, by.x = "prefecture", by.y = "prefecture_en")
+  # 构建空输出数据框
+  x_output <- data.frame(
+    city = x_1920$city,
+    year = x_1920$year,
+    month = x_1920$month
+  )
+  x_output <- subset(x_output, year %in% c(2019, 2020))
 
-fun_seqchg_chg_2019_2020 <- function(x) {
-  # 更改输入数据的月份为数字格式后按照城市、年、月排序
-  x$month <- as.numeric(x$month)
-  x <- x[order(x$city, x$year, x$month), ]
-  # 新建一列时间步长差一个月的数据并计算环比
-  x$pre <- c(NA, x$user[1: length(x$year)-1])
-  x$seqchg <- (x$user - x$pre) / x$pre
-  # 计算2019-2020环比变化率
-  x_output <-
-    merge(x[which(x$year == "2019"), ],
-          x[which(x$year == "2020"), ],
-          by = c("city", "month"))
-  x_output$seqchg_chg <-
-    (x_output$pre.y - x_output$pre.x) /
-    x_output$pre.x
+  # 仅保留2019和2020年目标列的数据
+  x_1920 <- subset(x_1920, year %in% c(2019, 2020),
+                   select = names(x_1920)[!names(x_1920) %in%
+                                            c("city", "year", "month")])
+  x_1920_pre <- subset(x_1920_pre, year %in% c(2019, 2020),
+                       select = names(x_1920_pre)[!names(x_1920_pre) %in%
+                                                c("city", "year", "month")])
+
+  # 计算环比
+  x_output <- cbind(x_output, (x_1920 - x_1920_pre) / x_1920_pre)
+
+  # 输出结果
   return(x_output)
 }
-mthseqchg_chg <- fun_seqchg_chg_2019_2020(record_user_monthly)
 
-# 合并环比变化率数据和新冠感染数据
-mthseqchg_chg <-
-  merge(mthseqchg_chg, covid_monthly,
-        by.x = c("city", "month"), by.y = c("city_en", "month"))
-# 区分上下半年
-mthseqchg_chg$phase <- "before"
-mthseqchg_chg$phase[which(mthseqchg_chg$month > 6)] <- "after"
-ggplot(mthseqchg_chg) + geom_point(aes(seqchg_chg, number, color = phase), alpha = 0.5) +
-  facet_wrap(.~ city, scales = "free")
-# 查看相关性分析统计结果
-for (i in tar_city) {
-  fit <- cor.test(mthseqchg_chg[mthseqchg_chg$city == i, ]$number,
-                  mthseqchg_chg[mthseqchg_chg$city == i, ]$users.y)
-  cat(i, "\n",
-      cor(mthseqchg_chg[mthseqchg_chg$city == i, ]$seqchg_chg,
-          mthseqchg_chg[mthseqchg_chg$city == i, ]$number), "\n",
-      fit$p.value, "\n")
-}
-# 结论：正负相关均有，且少有显著关系
+# 2019-2020年各项指标环比月度变化作图
+tot_mthdata_seqchg_1920 <- fun_seqchg_1920(tot_mthdata)
+ggplot(melt(tot_mthdata_seqchg_1920, id = c("city", "year", "month"))) +
+  geom_line(aes(month, value, color = year)) +
+  facet_grid(variable ~ city, scales = "free")
+
+# 2020年相比前一年环比的变化率和新冠的关系
+tot_mthdata_seqchg_chg_1920 <- fun_mthchange_1920(tot_mthdata_seqchg_1920)
+fun_plot_mthchg1920_covid(tot_mthdata_seqchg_chg_1920)
+# 问题：未能统计分析该指标和新冠感染数的关系
 
 # 微观分析：追踪连续参与用户的变化 ----
 ## Observation of cont users ----
