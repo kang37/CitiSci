@@ -458,26 +458,26 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
   facet_wrap(.~ city, scales = "free_y")
 # 视觉判断：相比观测数，不同分组用户的活跃天数差异更大
 
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
-  facet_grid(city ~ year, scales = "free_y")
-
 
 # 尝试3：
-# 新的分组方式：根据用户是第几年参与进行分组
+# 分组：根据用户是第几年参与进行分组-第1年，第2年，第3年及以上
 user_yrdata <- fun_ls2df(lapply(record, fun_smrydata))
 user_yrdata$rec_yr <-
   ave(as.numeric(user_yrdata$year),
       list(user_yrdata$user, user_yrdata$city), FUN = seq_along)
+user_yrdata$rec_yr_grp <-
+  user_yrdata$rec_yr
+user_yrdata$rec_yr_grp[which(user_yrdata$rec_yr >= 3)] <- 3
 
 # 查看不同分组观测数或活跃天数的差异
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
   facet_wrap(.~ city, scales = "free")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
   facet_wrap(.~ city, scales = "free")
 # 加入年份分组
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
   facet_grid(year ~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
   facet_grid(year ~ city, scales = "free_y")
 # 视觉判断：相比上一种尝试，区分效果差不多，结果图像略右偏，右边的样本量减少
 
