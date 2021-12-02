@@ -272,7 +272,7 @@ fun_corcovid <- function(x, covid_df) {
     x_output_ls[[i]] <-
       apply(subset(x, city == i)[tar_var], 2,
             function(y) {
-              cor.test(y, subset(x_covid, city == i,
+              cor.test(y, subset(covid_df, city_en == i,
                                  select = "number")$number)$p.value})
   }
   # 将结果列表转化为数据框形式
@@ -295,7 +295,8 @@ fun_corcovid <- function(x, covid_df) {
 # 每月各项变化
 tot_mthdata_chg_1920 <- fun_mthchange_1920(tot_mthdata)
 fun_plot_mthchg1920_covid(tot_mthdata_chg_1920)
-fun_corcovid(x = tot_mthdata_chg_1920, covid_df = covid_monthly)
+# 问题：统计检验函数出问题
+# fun_corcovid(x = tot_mthdata_chg_1920, covid_df = covid_monthly)
 
 ## 环比变化率~新冠感染数 ----
 # 函数：2019-2020年各项指标环比数据
@@ -359,104 +360,104 @@ tot_mthdata_seqchg_chg_1920 <- fun_mthchange_1920(tot_mthdata_seqchg_1920)
 fun_plot_mthchg1920_covid(tot_mthdata_seqchg_chg_1920)
 # 问题：未能统计分析该指标和新冠感染数的关系
 
-# 微观分析：追踪连续参与用户的变化 ----
-## Observation of cont users ----
-# 输出各用户每年的观测数宽表
-fun_usertrack <- function(obs_user_year) {
-  obs_user_year <- obs_user_year[c("user_login", "observed_on")]
-  obs_user_year$observed_on <- year(as_date(obs_user_year$observed_on))
-  obs_user_year <-
-    aggregate(obs_user_year$user_login,
-              by = list(obs_user_year$user_login, obs_user_year$observed_on),
-              FUN = "length")
-  names(obs_user_year) <- c("user", "year", "obs")
-  # 转换成宽数据
-  obs_user_year <- dcast(obs_user_year, user ~ year, value.var = "obs")
-  # 输出数据
-  return(obs_user_year)
+# User behavior ----
+# 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
+
+## Observation of active users ----
+# 定义活跃用户为2016-2020年间2年有上传记录的用户
+
+# 函数：输出各用户各年份观测数、活跃天数及日均观测数
+fun_smrydata <- function(x) {
+  # 从日期中提取年月数据
+  x[, "observed_on"] <- as.Date(x[, "observed_on"])
+  x[, "year"] <- year(x[, "observed_on"])
+  x[, "month"] <- month(x[, "observed_on"])
+  x[, "day"] <- day(x[, "observed_on"])
+
+  x$year <- factor(x$year)
+  x$day <- factor(x$day)
+
+  # 观测数即每年的记录条数
+  x_obs <- aggregate(
+    x[, "observed_on"], by = list(x$user_id, x$year), FUN = "length"
+  )
+  names(x_obs) <- c("user", "year", "obs")
+  # 活跃天数即各用户的活跃天数之和
+  x_actdays <- unique(x[c("user_id", "year", "month", "day")])
+  x_actdays <- aggregate(
+    x_actdays[, "user_id"],
+    by = list(x_actdays$user_id, x_actdays$year), FUN = "length")
+  names(x_actdays) <- c("user", "year", "act_days")
+
+  # 默认根据user和year进行merge
+  x_output <- Reduce(merge, list(x_obs, x_actdays))
+
+  # 计算用户的日均观测数
+  x_output$obs_pd <- x_output$obs / x_output$act_days
+
+  return(x_output)
 }
 
-fun_contuser <- function(obs_user_year) {
-  # 输入用户每年观测数宽表
-  # 以两年为窗口，循环计算两年之间的差值
-  # 建立向量，以存储各个城市2016-2020年每年相比前一年，连续用户中观测数增长的比例
-  usertrack_output <- vector("numeric")
-  for (i in 2016:2020) {
-    # 计算两年差值
-    obs_user_year[paste0("chg", i)] <-
-      obs_user_year[paste(i)] - obs_user_year[paste(i-1)]
-    usertrack_output <-
-      c(usertrack_output,
-        # 接入连续用户数总数
-        sum(is.na(obs_user_year[paste0("chg", i)]) == FALSE))
-  }
-  # 输出观测数增长的连续用户数占总连续用户数的比例
-  return(usertrack_output)
+# 标注活跃参与者并比较不同组用户的每年行为差异
+# 函数：给各城市用户分组，标注活跃用户
+# 输入：各城市各用户各年份观测数等数据框
+fun_actpa <- function(x) {
+  # 生成各城市活跃参与者名单
+  actpa <- aggregate(obs ~ city + user, x, FUN = "length")
+  names(actpa) <- c("city", "user", "rec_yr")
+  actpa$actpa <- actpa$rec_yr >= 2
+
+  # 标注输入数据中的活跃参与者
+  x <- merge(x, actpa, by = c("city", "user"), all.x = TRUE)
+
+  return(x)
 }
 
-fun_contusermoreprop <- function(obs_user_year) {
-  # 输入用户每年观测数宽表
-  # 以两年为窗口，循环计算两年之间的差值
-  # 建立向量，以存储各个城市2016-2020年每年相比前一年，连续用户中观测数增长的比例
-  usertrack_output <- vector("numeric")
-  for (i in 2016:2020) {
-    # 计算两年差值
-    obs_user_year[paste0("chg", i)] <-
-      obs_user_year[paste(i)] - obs_user_year[paste(i-1)]
-    usertrack_output <-
-      c(usertrack_output,
-        # 接入观测数增长的连续用户数占总连续用户数的比例
-        sum(obs_user_year[paste0("chg", i)] > 0, na.rm = TRUE) /
-          sum(is.na(obs_user_year[paste0("chg", i)]) == FALSE))
-  }
-  # 输出观测数增长的连续用户数占总连续用户数的比例
-  return(usertrack_output)
-}
+user_yrdata <- fun_ls2df(lapply(record, fun_smrydata))
+user_yrdata <- fun_actpa(user_yrdata)
 
-# 生成各城市每个用户每年的观测数
-obs_user_year <- lapply(record, fun_usertrack)
-# 虽然下载了2015-2020的数据，但有些城市并没有2015年的数据
-# 权宜之计，对于这些城市，2015年数据补全为NA
-obs_user_year$Kawasaki$"2015" <- NA
-obs_user_year$Saitama$"2015" <- NA
+# 查看不同分组观测数或活跃天数的差异
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
+  facet_wrap(.~ city, scales = "free")
+# 视觉上判断：对于其中6个城市来说，上传年数高的参与者观察数也多
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
+  facet_wrap(.~ city, scales = "free")
+# 视觉上判断：对于其中9个城市，上传年数高的参与者活跃天数也较高
+ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, obs)) +
+  facet_wrap(.~ city, scales = "free")
+# 视觉上判断：区分效果不如上传年数好，但是也有4个左右城市活跃用户的上传数显示稍高
+ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, act_days)) +
+  facet_wrap(.~ city, scales = "free")
+# 视觉上判断：区分效果不如上传年数好，但是也有5个左右城市活跃用户的活跃天数显示稍高
 
-# 生成各城市每年连续用户数数据框
-contuser_city_year <- lapply(obs_user_year, fun_contuser)
-contuser_city_year <- as.data.frame(Reduce(rbind, contuser_city_year))
-contuser_city_year$city <- names(obs_user_year)
-rownames(contuser_city_year) <- NULL
-names(contuser_city_year) <- c(2016:2020, "city")
-contuser_city_year <- contuser_city_year[c("city", 2016:2020)]
-# 转化成长表
-contuser_city_year <-
-  melt(contuser_city_year, id = "city",
-       variable.name = "year", value.name = "contuser")
-# 权宜之计：对连续用户少于10人的年份不予分析
-contuser_city_year <-
-  contuser_city_year[which(contuser_city_year$contuser > 10), ]
+# 加入年份分组看看
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
+  facet_grid(year ~ city, scales = "free_y")
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
+  facet_grid(year ~ city, scales = "free_y")
+ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, obs)) +
+  facet_grid(year ~ city, scales = "free_y")
+ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, act_days)) +
+  facet_grid(year ~ city, scales = "free_y")
+# 视觉判断：似乎区分效果反而不如不加年份的好
 
-# 生成各城市每年连续用户中观测增长者比例的数据框
-contusermoreprop_city_year <- lapply(obs_user_year, fun_contusermoreprop)
-contusermoreprop_city_year <- as.data.frame(Reduce(rbind, contusermoreprop_city_year))
-contusermoreprop_city_year$city <- names(obs_user_year)
-rownames(contusermoreprop_city_year) <- NULL
-names(contusermoreprop_city_year) <- c(2016:2020, "city")
-contusermoreprop_city_year <- contusermoreprop_city_year[c("city", 2016:2020)]
-# 转化成长表
-contusermoreprop_city_year <-
-  melt(contusermoreprop_city_year, id = "city",
-       variable.name = "year", value.name = "contusermoreprop")
+# 考虑组内样本数不足的问题，分成3个组试试看：1年，2年，3年及以上
+user_yrdata$rec_yr_grp <- user_yrdata$rec_yr
+user_yrdata$rec_yr_grp[which(user_yrdata$rec_yr >= 3)] <- 3
 
-# 保留和连续用户数据框一致的条目
-contuser_all <-
-  merge(contuser_city_year, contusermoreprop_city_year, by = c("city", "year"))
-p1 <- ggplot(contuser_city_year) + geom_col(aes(year, contuser)) +
-  facet_wrap(.~city, nrow = 1)
-p2 <- ggplot(contuser_all) + geom_col(aes(year, contusermoreprop)) +
-  facet_wrap(.~city, nrow = 1)
-p1 / p2
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
+  facet_grid(year ~ city, scales = "free_y")
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
+  facet_grid(year ~ city, scales = "free_y")
+# 问题：有没有可能在疫情下不同用户之间的差异反而变大了？
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
+  facet_wrap(.~ city, scales = "free_y")
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
+  facet_wrap(.~ city, scales = "free_y")
+# 视觉判断：相比观测数，不同分组用户的活跃天数差异更大
 
-# 暂时的结论：大约一半的连续用户在2020年观测数比2019年多，当然这个数据也要和2018-2019年的变化量进行对比，比如从连续用户总数和连续用户中观测数增长者的占比的对比可以看出，虽然2019-2020很多城市的连续用户数上升了，但是比例却下降了，可能也反映了新冠的影响，就是说有更多人在2020年持续上传观测，这可能是平台持续增长的体现，但是同时观测增加者的比例却下降了
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
+  facet_grid(city ~ year, scales = "free_y")
 
 ## Active days by city ----
 # 函数：生成年度和月度活跃天数数据框
