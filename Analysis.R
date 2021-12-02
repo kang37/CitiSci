@@ -364,6 +364,8 @@ fun_plot_mthchg1920_covid(tot_mthdata_seqchg_chg_1920)
 # 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
 
 ## Observation of active users ----
+
+# 尝试2：
 # 定义活跃用户为2016-2020年间2年有上传记录的用户
 
 # 函数：输出各用户各年份观测数、活跃天数及日均观测数
@@ -418,10 +420,10 @@ user_yrdata <- fun_actpa(user_yrdata)
 
 # 查看不同分组观测数或活跃天数的差异
 ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
-  facet_wrap(.~ city, scales = "free")
+  facet_wrap(.~ city, scales = "free_y")
 # 视觉上判断：对于其中6个城市来说，上传年数高的参与者观察数也多
 ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
-  facet_wrap(.~ city, scales = "free")
+  facet_wrap(.~ city, scales = "free_y")
 # 视觉上判断：对于其中9个城市，上传年数高的参与者活跃天数也较高
 ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, obs)) +
   facet_wrap(.~ city, scales = "free")
@@ -458,6 +460,26 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
 
 ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
   facet_grid(city ~ year, scales = "free_y")
+
+
+# 尝试3：
+# 新的分组方式：根据用户是第几年参与进行分组
+user_yrdata <- fun_ls2df(lapply(record, fun_smrydata))
+user_yrdata$rec_yr <-
+  ave(as.numeric(user_yrdata$year),
+      list(user_yrdata$user, user_yrdata$city), FUN = seq_along)
+
+# 查看不同分组观测数或活跃天数的差异
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
+  facet_wrap(.~ city, scales = "free")
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
+  facet_wrap(.~ city, scales = "free")
+# 加入年份分组
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
+  facet_grid(year ~ city, scales = "free_y")
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
+  facet_grid(year ~ city, scales = "free_y")
+# 视觉判断：相比上一种尝试，区分效果差不多，结果图像略右偏，右边的样本量减少
 
 ## Active days by city ----
 # 函数：生成年度和月度活跃天数数据框
