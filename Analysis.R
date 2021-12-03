@@ -488,6 +488,8 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
 fun_aov <- function(x) {
   # 仅保留2019-2020年的数据
   x <- subset(x, year %in% c(2019, 2020))
+  # 由于第3用户组出现样本不足的情况，将其和第2用户组合并
+  x$rec_yr_grp[which(x$rec_yr_grp == 3)] <- 2
   # 按照城市和用户组分成分组列表
   x_ls <- split(x, x$city)
   x_ls <- lapply(x_ls, function(y) {split(y, f = y$rec_yr_grp)})
