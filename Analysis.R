@@ -481,6 +481,28 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
   facet_grid(year ~ city, scales = "free_y")
 # 视觉判断：相比上一种尝试，区分效果差不多，结果图像略右偏，右边的样本量减少
 
+# 统计分析
+
+# 函数：AOV统计分析
+# 输入：各城市各用户各年份各项指标数据框
+fun_aov <- function(x) {
+  # 按照城市和年份分成分组列表
+  x_ls <- split(x, x$city)
+  x_ls <- lapply(x_ls, function(y) {split(y, f = y$year)})
+  # 分城市分年份对各项指标~用户分组进行AOV检验
+  for (j in c("obs", "act_days", "obs_pd")) {
+    cat("\n", j, "\n")
+    for (i in names(record)) {
+      cat("\n", i, "\n")
+      lapply(x_ls[[i]], function(y){
+        print(summary(aov(
+          formula = y[, j] ~ y$rec_yr_grp))[[1]]$`Pr(>F)`[1] < 0.05)
+      })
+    }
+  }
+}
+fun_aov(user_yrdata)
+
 ## Active days by city ----
 # 函数：生成年度和月度活跃天数数据框
 # 输入单个城市的数据，输出各用户每月的活跃天数列表
