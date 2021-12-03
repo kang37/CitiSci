@@ -68,6 +68,7 @@ fun_smrydata <- function(x, dur = "month") {
   x$year <- factor(x$year)
   x$day <- factor(x$day)
 
+  # 月度和年度计算方法不同
   if (dur == "month") {
     # 记录数即每个月的数据记录条数
     x_obs <- aggregate(
@@ -94,32 +95,45 @@ fun_smrydata <- function(x, dur = "month") {
     x_output$obs_per_user <- x_output$obs / x_output$users
     x_output$actdays_per_user <- x_output$act_days / x_output$users
     x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
-  }
-
-  # 按年度进行数据汇总计算
-  if (dur == "year") {
-    # 年度记录数
+  } else if (dur == "year") {
+    # 历年观测数
     x_obs <- aggregate(x[, "observed_on"], by = list(x$year), FUN = "length")
     names(x_obs) <- c("year", "obs")
+
+    # 历年有鉴定的观测数
+    # 在原数据上加上鉴定用户数，再判断鉴定用户数大于0的观测数
+    x$idpa <- x$num_identification_agreements +
+      x$num_identification_disagreements
+    x_obsid <-
+      aggregate(idpa ~ year, data = x,
+                FUN = function(y) {sum(y > 0)})
+    names(x_obsid) <- c("year", "obs_id")
+
+    # 历年参与鉴定的用户数
+    x_idpa <- aggregate(idpa ~ year, data = x, FUN = "sum")
+
     # 用户数即每个月的不重复用户数
     x_users <- unique(x[c(c("year", "user_id"))])
     x_users <- aggregate(
       x_users[, "user_id"], by = list(x_users$year), FUN = "length"
     )
     names(x_users) <- c("year", "users")
+
     # 活跃天数即每个月的各用户的活跃天数之和
     x_actdays <- unique(x[c("user_id", "year", "day")])
     x_actdays <- aggregate(
       x_actdays[, "user_id"],
       by = list(x_actdays$year), FUN = "length")
     names(x_actdays) <- c("year", "act_days")
-    # 输出结果：默认根据year进行merge
-    x_output <- Reduce(merge, list(x_obs, x_users, x_actdays))
 
-    # 计算人均记录数、人均活跃天数、人均日均记录数
+    # 输出结果：默认根据year进行merge
+    x_output <- Reduce(merge, list(x_obs, x_obsid, x_idpa, x_users, x_actdays))
+
+    # 计算人均记录数、人均活跃天数、人均日均记录数、观测鉴定率
     x_output$obs_per_user <- x_output$obs / x_output$users
     x_output$actdays_per_user <- x_output$act_days / x_output$users
     x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
+    x_output$id_rate <- x_output$obs_id / x_output$obs
   }
   return(x_output)
 }
@@ -163,9 +177,12 @@ fun_plot <- function(x, var_ls, dur = "month") {
 tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year"))
 tot_yrdata$year <- as.numeric(tot_yrdata$year)
 
-plot_ls <- fun_plot(tot_yrdata,
-                    var_ls = c("obs", "users", "act_days", "obs_per_user",
-                               "actdays_per_user", "obs_pu_pd"), dur = "year")
+plot_ls <-
+  fun_plot(tot_yrdata,
+           var_ls = c("obs", "users", "act_days",
+                      "obs_per_user", "actdays_per_user", "obs_pu_pd",
+                      "idpa", "id_rate"),
+           dur = "year")
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
@@ -512,37 +529,7 @@ fun_aov <- function(x) {
 
 fun_aov(user_yrdata)
 
-# 物种鉴别数据分析 ----
-# 疫情期间鉴别率是否上升？
-fun_id_rate <- function(x) {
-  # 保留观测时间和鉴定者数数据
-  x <- x[c("observed_on", "num_identification_agreements",
-           "num_identification_disagreements")]
-  x[, "year"] <- year(as_date(x[, "observed_on"]))
-  x[, "num_id"] <- x[, "num_identification_agreements"] +
-    x[, "num_identification_disagreements"]
-  # 汇总计算每年的鉴定率
-  # 每年总观测数
-  x_agg <-
-    aggregate(x[, "num_identification_agreements"],
-              by = list(x[, "year"]), FUN = "length")
-  # 其中鉴定数大于0的观测数
-  x_agg[, "identified"] <-
-    aggregate(x[which(x[, "num_id"] > 0), "num_identification_agreements"],
-              by = list(x[which(x[, "num_id"] > 0), "year"]),
-              FUN = "length")[, 2]
-  names(x_agg) <- c("year", "obs_tot", "obs_id")
-  x_agg[, "id_rate"] <- x_agg[, "obs_id"] / x_agg[, "obs_tot"]
-  return(x_agg)
-}
-
-id_year <- lapply(record, fun_id_rate)
-
-# 作图：各城市2015-2020年鉴定率变化
-par(mfrow = c(3, 4))
-for (name_city in names(id_year)) {
-  plot(id_year[[name_city]]$year, id_year[[name_city]]$id_rate, type = "l",
-       main = name_city, xlab = "", ylab = "id_rate")
-}
+## Identify behavior ----
+# 在年度总图中有参与鉴定用户数和观测鉴定率的分析
 # 结论：2020年鉴定率升高的城市只是少数
 
