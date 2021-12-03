@@ -486,21 +486,28 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
 # 函数：AOV统计分析
 # 输入：各城市各用户各年份各项指标数据框
 fun_aov <- function(x) {
-  # 按照城市和年份分成分组列表
+  # 仅保留2019-2020年的数据
+  x <- subset(x, year %in% c(2019, 2020))
+  # 按照城市和用户组分成分组列表
   x_ls <- split(x, x$city)
-  x_ls <- lapply(x_ls, function(y) {split(y, f = y$year)})
+  x_ls <- lapply(x_ls, function(y) {split(y, f = y$rec_yr_grp)})
   # 分城市分年份对各项指标~用户分组进行AOV检验
   for (j in c("obs", "act_days", "obs_pd")) {
     cat("\n", j, "\n")
     for (i in names(record)) {
       cat("\n", i, "\n")
       lapply(x_ls[[i]], function(y){
-        print(summary(aov(
-          formula = y[, j] ~ y$rec_yr_grp))[[1]]$`Pr(>F)`[1] < 0.05)
+        if (length(unique(y$year)) >= 2) {
+          print(summary(aov(
+            formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] < 0.05)
+        } else {
+          print("Less than 2 factors.")
+        }
       })
     }
   }
 }
+
 fun_aov(user_yrdata)
 
 ## Active days by city ----
