@@ -280,42 +280,36 @@ fun_plot_mthchg1920_covid <- function(x) {
 # 输入：各城市2020年各月不同指标数据数据框，各城市2020各月新冠感染数数据框
 # 输出：各城市2020年各月不同指标和新冠感染数相关关系的p值数据
 fun_corcovid <- function(x, covid_df) {
-  # 生成空结果列表用于存储计算结果
-  x_output_ls <- vector("list", 11)
-  names(x_output_ls) <- unique(x$city)
+  # 将2020年公民科学数据和新冠数据合并
+  x_covid <-
+    merge(x, covid_df,
+          by.x = c("city", "month"), by.y = c("city_en", "month"),
+          all.x = TRUE)
 
-  tar_var <- names(x)[!names(x) %in% c("city", "year", "month")]
-  for (i in names(record)) {
-    x_output_ls[[i]] <-
-      apply(subset(x, city == i)[tar_var], 2,
-            function(y) {
-              cor.test(y, subset(covid_df, city_en == i,
-                                 select = "number")$number)$p.value})
+  # 按照城市分成分组列表
+  x_ls <- split(x_covid, x_covid$city)
+
+  # 分城市进行相关性检验
+  for (j in c("obs", "users", "act_days", "obs_per_user",
+              "actdays_per_user", "obs_pu_pd")) {
+    cat("\n", j, "\n")
+    cor_ls <- lapply(x_ls, function(y) {
+      cor.test(y[, j], y$number)$p.value < 0.05
+    })
+    cor_df <- data.frame(
+      city = names(x_ls),
+      cor = Reduce(rbind, cor_ls)
+    )
+    cor_df
   }
-  # 将结果列表转化为数据框形式
-  x_output <- Reduce(rbind, x_output_ls)
-  x_output <- as.data.frame(x_output)
-  rownames(x_output) <- NULL
-  x_output$city <- names(x_output_ls)
-  x_output <- x_output[c("city", tar_var)]
-  # 转化为二元数据：判断p值是否小于0.05
-  x_output <-
-    cbind(city = x_output$city,
-          subset(x_output, select = names(x_output)[
-            !names(x_output) %in% "city"]) < 0.05)
-  x_output <- as.data.frame(x_output)
-  # 作图可视化各指标和新冠感染数相关的城市有几个
-  ggplot(melt(x_output, id = c("city"))) +
-    geom_tile(aes(city, variable, fill = value), alpha = 0.6)
 }
 
 # 每月各项变化
 tot_mthdata_chg_1920 <- fun_mthchange_1920(tot_mthdata)
 fun_plot_mthchg1920_covid(tot_mthdata_chg_1920)
-# 问题：统计检验函数出问题
-# fun_corcovid(x = tot_mthdata_chg_1920, covid_df = covid_monthly)
+fun_corcovid(x = tot_mthdata_chg_1920, covid_df = covid_monthly)
 
-## 环比变化率~新冠感染数 ----
+## 环比~新冠感染数 ----
 # 函数：2019-2020年各项指标环比数据
 # 输入：各城市各年月的各项指标数据
 # 输出：各城市各年月的各项指标相比去年同期的变化率
