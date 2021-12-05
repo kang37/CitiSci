@@ -372,7 +372,8 @@ fun_plot_mthchg1920_covid(tot_mthdata_seqchg_chg_1920)
 # 问题：未能统计分析该指标和新冠感染数的关系
 
 # User behavior ----
-# 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
+# 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用
+# 户和其他用户在疫情期间的表现有何差异
 
 ## Observation of active users ----
 
@@ -441,7 +442,8 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, obs)) +
 # 视觉上判断：区分效果不如上传年数好，但是也有4个左右城市活跃用户的上传数显示稍高
 ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, act_days)) +
   facet_wrap(.~ city, scales = "free")
-# 视觉上判断：区分效果不如上传年数好，但是也有5个左右城市活跃用户的活跃天数显示稍高
+# 视觉上判断：区分效果不如上传年数好，但是也有5个左右城市活跃用户的活跃天数显示
+# 稍高
 
 # 加入年份分组看看
 ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
