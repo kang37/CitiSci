@@ -59,13 +59,25 @@ covid_monthly <-
 # 函数：汇总计算记录数、活跃用户数、活跃天数等数据
 # 输入数据框：日期、user_id等信息
 fun_smrydata <- function(x, dur = "month") {
+  # 在原数据基础上加上鉴定者数列
+  x$idpa <- x$num_identification_agreements +
+    x$num_identification_disagreements
+
   # 月度和年度计算方法不同
   if (dur == "month") {
     # 记录数即每个月的数据记录条数
-    x_obs <- aggregate(
-      x[, "observed_on"], by = list(x$year, x$month), FUN = "length"
-    )
+    x_obs <- aggregate(observed_on ~ year + month, data = x, FUN = "length")
     names(x_obs) <- c("year", "month", "obs")
+
+    # 有鉴定的观测数：鉴定用户数大于0的观测数
+    x_obsid <-
+      aggregate(idpa ~ year + month, data = x,
+                FUN = function(y) {sum(y > 0)})
+    names(x_obsid) <- c("year", "month", "obs_id")
+
+    # 历年参与鉴定的用户数
+    x_idpa <- aggregate(idpa ~ year + month, data = x, FUN = "sum")
+
     # 用户数即每个月的不重复用户数
     x_users <- unique(x[c(c("year", "month", "user_id"))])
     x_users <- aggregate(
@@ -73,28 +85,21 @@ fun_smrydata <- function(x, dur = "month") {
       by = list(x_users$year, x_users$month), FUN = "length"
     )
     names(x_users) <- c("year", "month", "users")
+
     # 活跃天数即每个月的各用户的活跃天数之和
     x_actdays <- unique(x[c("user_id", "year", "month", "day")])
     x_actdays <- aggregate(
       x_actdays[, "user_id"],
       by = list(x_actdays$year, x_actdays$month), FUN = "length")
     names(x_actdays) <- c("year", "month", "act_days")
-    # 输出结果：默认根据year和month进行merge
-    x_output <- Reduce(merge, list(x_obs, x_users, x_actdays))
 
-    # 计算人均记录数、人均活跃天数、人均日均记录数
-    x_output$obs_per_user <- x_output$obs / x_output$users
-    x_output$actdays_per_user <- x_output$act_days / x_output$users
-    x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
   } else if (dur == "year") {
     # 历年观测数
     x_obs <- aggregate(x[, "observed_on"], by = list(x$year), FUN = "length")
     names(x_obs) <- c("year", "obs")
 
     # 历年有鉴定的观测数
-    # 在原数据上加上鉴定用户数，再判断鉴定用户数大于0的观测数
-    x$idpa <- x$num_identification_agreements +
-      x$num_identification_disagreements
+    # 判断鉴定用户数大于0的观测数
     x_obsid <-
       aggregate(idpa ~ year, data = x,
                 FUN = function(y) {sum(y > 0)})
@@ -116,16 +121,17 @@ fun_smrydata <- function(x, dur = "month") {
       x_actdays[, "user_id"],
       by = list(x_actdays$year), FUN = "length")
     names(x_actdays) <- c("year", "act_days")
-
-    # 输出结果：默认根据year进行merge
-    x_output <- Reduce(merge, list(x_obs, x_obsid, x_idpa, x_users, x_actdays))
-
-    # 计算人均记录数、人均活跃天数、人均日均记录数、观测鉴定率
-    x_output$obs_per_user <- x_output$obs / x_output$users
-    x_output$actdays_per_user <- x_output$act_days / x_output$users
-    x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
-    x_output$id_rate <- x_output$obs_id / x_output$obs
   }
+
+  # 合并结果：默认根据year或者year + month进行merge
+  x_output <- Reduce(merge, list(x_obs, x_obsid, x_idpa, x_users, x_actdays))
+
+  # 计算人均记录数、人均活跃天数、人均日均记录数、观测鉴定率
+  x_output$obs_per_user <- x_output$obs / x_output$users
+  x_output$actdays_per_user <- x_output$act_days / x_output$users
+  x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
+  x_output$id_rate <- x_output$obs_id / x_output$obs
+
   return(x_output)
 }
 
@@ -149,12 +155,14 @@ fun_plot <- function(x, var_ls, plotname, dur = "month") {
 
   # 循环作图并存储
   if (dur == "month") {
-    for (i in var_ls) {
+    for (i in 1:length(var_ls)) {
       # 将年份设置为因子以便分别赋予颜色
       x$year <- factor(x$year)
       plot_ls[[i]] <- ggplot(x) +
-        geom_line(aes_string("month", i, color = "year")) +
+        geom_line(aes_string("month", var_ls[i], color = "year")) +
+        scale_x_continuous(breaks = c(3, 6, 9, 12)) +
         scale_color_manual(values = c("2019" = "#00AF64", "2020" = "#bf5930")) +
+        labs(title = plotname[i], y = NULL, x = "") +
         facet_wrap(.~ city, nrow = 1, scales = "free")
     }
   } else if (dur == "year") {
@@ -245,11 +253,27 @@ tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "month"))
 
 # 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
 tot_mthdata_1920 <- subset(tot_mthdata, year %in% c(2019, 2020))
-plot_ls <- fun_plot(tot_mthdata_1920,
-                    var_ls = c("obs", "users", "act_days", "obs_per_user",
-                               "actdays_per_user", "obs_pu_pd"))
+
+png(filename = "19-20年各月各项指标变化.png", res = 300,
+    width = 3000, height = 4500)
+plot_ls <- fun_plot(
+  tot_mthdata_1920,
+  var_ls =
+    c("obs", "users", "act_days",
+      "obs_per_user",
+      "actdays_per_user",
+      "obs_pu_pd",
+      "idpa", "id_rate"),
+  plotname =
+    c("(a) Observation", "(b) Participant", "(c) Active days",
+      "(d) Observations per participant",
+      "(e) Active days per participant",
+      "(f) Observations per participant per active days",
+      "(g) Identification participant", "(h) Identification rate")
+  )
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
 
 ## Varieties of idx vs. covid data ----
 # 2019-2020每月同比变化
