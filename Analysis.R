@@ -59,15 +59,6 @@ covid_monthly <-
 # 函数：汇总计算记录数、活跃用户数、活跃天数等数据
 # 输入数据框：日期、user_id等信息
 fun_smrydata <- function(x, dur = "month") {
-  # 从日期中提取年月数据
-  x[, "observed_on"] <- as.Date(x[, "observed_on"])
-  x[, "year"] <- year(x[, "observed_on"])
-  x[, "month"] <- month(x[, "observed_on"])
-  x[, "day"] <- day(x[, "observed_on"])
-
-  x$year <- factor(x$year)
-  x$day <- factor(x$day)
-
   # 月度和年度计算方法不同
   if (dur == "month") {
     # 记录数即每个月的数据记录条数
@@ -151,7 +142,7 @@ fun_ls2df <- function(x) {
 }
 
 # 函数：按照列名批量生成图片并存储在列表中
-fun_plot <- function(x, var_ls, dur = "month") {
+fun_plot <- function(x, var_ls, plotname, dur = "month") {
   # 构建存放图片的列表
   plot_ls <- vector("list", length(var_ls))
   names(plot_ls) <- var_ls
@@ -165,9 +156,11 @@ fun_plot <- function(x, var_ls, dur = "month") {
         facet_wrap(.~ city, nrow = 1, scales = "free")
     }
   } else if (dur == "year") {
-    for (i in var_ls) {
+    for (i in 1:length(var_ls)) {
       plot_ls[[i]] <- ggplot(x) +
-        geom_line(aes_string("year", i)) +
+        geom_line(aes_string("yr_sht", var_ls[i])) +
+        theme(axis.text.x = element_text(angle = 90)) +
+        labs(title = plotname[i], y = NULL, x = "") +
         facet_wrap(.~ city, nrow = 1, scales = "free")
     }
   }
@@ -175,16 +168,30 @@ fun_plot <- function(x, var_ls, dur = "month") {
 }
 
 tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year"))
-tot_yrdata$year <- as.numeric(tot_yrdata$year)
+# 生成年份缩写列用于作图
+tot_yrdata$yr_sht <- tot_yrdata$year - 2000
 
+# 作图：各城市各指标历年变化
 plot_ls <-
   fun_plot(tot_yrdata,
-           var_ls = c("obs", "users", "act_days",
-                      "obs_per_user", "actdays_per_user", "obs_pu_pd",
-                      "idpa", "id_rate"),
+           var_ls =
+             c("obs", "users", "act_days",
+               "obs_per_user",
+               "actdays_per_user",
+               "obs_pu_pd",
+               "idpa", "id_rate"),
+           plotname =
+             c("(a) Observation", "(b) Participant", "(c) Active days",
+               "(d) Observations per participant",
+               "(e) Active days per participant",
+               "(f) Observations per participant per active days",
+               "(g) Identification participant", "(h) Identification rate"),
            dur = "year")
+png(filename = "历年各项指标变化.png", res = 300,
+    width = 3000, height = 4500)
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
 
 # 报告分析
 # 2020年出现下降的城市
@@ -194,16 +201,17 @@ rep_tot_yrdata <- subset(tot_yrdata, year > 3)
 # 输出：对于各指标2020低于2019的城市个数并可视化
 fun_comp1920 <- function(x) {
   # 将数据分成2019和2020两部分并且按照城市排序
-  x1 <- subset(x, year == 4)
+  x1 <- subset(x, year == 2019)
   x1 <- x1[order(x1$city), ]
-  x2 <- subset(x, year == 5)
+  x2 <- subset(x, year == 2020)
   x2 <- x2[order(x2$city), ]
 
   # 计算各项数值的差异
   # 如果2020年比2019年高则判断为TRUE
   x <- cbind(city = x1$city,
-             x2[names(x2)[!names(x2) %in% c("city", "year")]] /
-               x1[names(x1)[!names(x1) %in% c("city", "year")]] > 1)
+             ifelse(x2[names(x2)[!names(x2) %in% c("city", "year")]] /
+                      x1[names(x1)[!names(x1) %in% c("city", "year")]] > 1,
+                    "20 > 19", "20 <= 19"))
   x <- as.data.frame(x)
 
   # 输出各项指标2020低于2019的城市数
@@ -212,7 +220,9 @@ fun_comp1920 <- function(x) {
 
   # 转化成长数据并作图
   x <- melt(x, id = "city")
-  ggplot(x) + geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5)
+  ggplot(x) +
+    geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5) +
+    theme(axis.text.x = element_text(angle = 90))
 }
 
 fun_comp1920(tot_yrdata)
