@@ -226,8 +226,17 @@ fun_comp1920 <- function(x) {
     geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5) +
     theme(axis.text.x = element_text(angle = 90))
 }
-
 fun_comp1920(tot_yrdata)
+
+# 室内参与和室外参与的关系？
+# 检测总体数据的参与者和鉴定者数量的关系
+cor.test(tot_yrdata$users, tot_yrdata$idpa)
+# 虽然按城市分组的话，每个城市只有5个样本，但是也可以看看情况如何
+lapply(split(tot_yrdata, tot_yrdata$city),
+       function(x) {cor.test(x$user, x$idpa)})
+# 检测结果发现，一些既往研究认为公民科学由室外转向室内，但是该分析表明两者同增
+# 共减，可以作为检验“新冠期间公民科学由室外转向室内”假说的参考，但是这里有点逻
+# 辑问题：无法准确说明2019-2020的情况。
 
 # Monthly comparison ----
 ## General comparison of 2019-2020 ----
