@@ -247,9 +247,29 @@ lapply(split(tot_yrdata, tot_yrdata$city),
 # 辑问题：无法准确说明2019-2020的情况。
 
 # Monthly comparison ----
-## General comparison of 2019-2020 ----
+## General comparison of 2016-2020 and 2019-2020 ----
 # 构建各年份月度数据
 tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "month"))
+png(filename = "历年各月各项指标变化.png", res = 300,
+    width = 3000, height = 4500)
+plot_ls <- fun_plot(
+  tot_mthdata,
+  var_ls =
+    c("obs", "users", "act_days",
+      "obs_per_user",
+      "actdays_per_user",
+      "obs_pu_pd",
+      "idpa", "id_rate"),
+  plotname =
+    c("(a) Observation", "(b) Participant", "(c) Active days",
+      "(d) Observations per participant",
+      "(e) Active days per participant",
+      "(f) Observations per participant per active days",
+      "(g) Identification participant", "(h) Identification rate")
+)
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
 
 # 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
 tot_mthdata_1920 <- subset(tot_mthdata, year %in% c(2019, 2020))
@@ -275,7 +295,7 @@ Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 
-## metrics ~ COVID data ----
+## Metrics ~ COVID data ----
 # 2019-2020每月同比变化
 # 函数：计算2020年每月相比上年相同月份的变化率
 # 输入：各城市各年月的各项指标数据
@@ -368,7 +388,7 @@ fun_corcovid(x = tot_mthdata_chg_1920,
                          "idpa", "id_rate"),
              covid_df = covid_monthly)
 
-## 环比~新冠感染数 ----
+## Seq and seq-change ~ COVID ----
 # 函数：2019-2020年各项指标环比数据
 # 输入：各城市各年月的各项指标数据
 # 输出：各城市各年月的各项指标相比去年同期的变化率
@@ -422,13 +442,17 @@ fun_seqchg_1920 <- function(x) {
 # 2019-2020年各项指标环比月度变化作图
 tot_mthdata_seqchg_1920 <- fun_seqchg_1920(tot_mthdata)
 ggplot(melt(tot_mthdata_seqchg_1920, id = c("city", "year", "month"))) +
-  geom_line(aes(month, value, color = year)) +
+  geom_line(aes(month, value, color = factor(year))) +
   facet_grid(variable ~ city, scales = "free")
 
 # 2020年相比前一年环比的变化率和新冠的关系
 tot_mthdata_seqchg_chg_1920 <- fun_mthchange_1920(tot_mthdata_seqchg_1920)
 fun_plot_mthchg1920_covid(tot_mthdata_seqchg_chg_1920)
-# 问题：未能统计分析该指标和新冠感染数的关系
+fun_corcovid(x = tot_mthdata_seqchg_chg_1920,
+             testvar = c("obs", "users", "act_days", "obs_per_user",
+                         "actdays_per_user", "obs_pu_pd",
+                         "idpa", "id_rate"),
+             covid_df = covid_monthly)
 
 # User behavior ----
 # 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用
