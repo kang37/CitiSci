@@ -275,7 +275,7 @@ Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 
-## Varieties of idx vs. covid data ----
+## metrics ~ COVID data ----
 # 2019-2020每月同比变化
 # 函数：计算2020年每月相比上年相同月份的变化率
 # 输入：各城市各年月的各项指标数据
@@ -324,7 +324,11 @@ fun_plot_mthchg1920_covid <- function(x) {
 # 函数：检验各城市2020年各月不同指标数据和对应新冠感染数的相关关系
 # 输入：各城市2020年各月不同指标数据数据框，各城市2020各月新冠感染数数据框
 # 输出：各城市2020年各月不同指标和新冠感染数相关关系的p值数据
-fun_corcovid <- function(x, covid_df) {
+fun_corcovid <- function(x, testvar, covid_df) {
+  # 建立空数据框用于存储数据
+  x_output <- vector("list", length = length(testvar))
+  names(x_output) <- testvar
+
   # 将2020年公民科学数据和新冠数据合并
   x_covid <-
     merge(x, covid_df,
@@ -335,24 +339,34 @@ fun_corcovid <- function(x, covid_df) {
   x_ls <- split(x_covid, x_covid$city)
 
   # 分城市进行相关性检验
-  for (j in c("obs", "users", "act_days", "obs_per_user",
-              "actdays_per_user", "obs_pu_pd")) {
-    cat("\n", j, "\n")
+  for (i in testvar) {
     cor_ls <- lapply(x_ls, function(y) {
-      cor.test(y[, j], y$number)$p.value < 0.05
+      cor.test(y[, i], y$number)$p.value < 0.05
     })
-    cor_df <- data.frame(
-      city = names(x_ls),
-      cor = Reduce(rbind, cor_ls)
-    )
-    cor_df
+    x_output[[i]] <- Reduce(rbind, cor_ls)
   }
+
+  # 将结果列表合并为数据框
+  x_output <- Reduce(cbind, x_output)
+  x_output <- as.data.frame(x_output)
+  x_output <- cbind(names(x_ls), x_output)
+  names(x_output) <- c("city", testvar)
+  rownames(x_output) <- NULL
+  print(x_output)
+
+  # 结果可视化
+  ggplot(melt(x_output, id = "city")) +
+    geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.6)
 }
 
 # 每月各项变化
 tot_mthdata_chg_1920 <- fun_mthchange_1920(tot_mthdata)
 fun_plot_mthchg1920_covid(tot_mthdata_chg_1920)
-fun_corcovid(x = tot_mthdata_chg_1920, covid_df = covid_monthly)
+fun_corcovid(x = tot_mthdata_chg_1920,
+             testvar = c("obs", "users", "act_days", "obs_per_user",
+                         "actdays_per_user", "obs_pu_pd",
+                         "idpa", "id_rate"),
+             covid_df = covid_monthly)
 
 ## 环比~新冠感染数 ----
 # 函数：2019-2020年各项指标环比数据
