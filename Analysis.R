@@ -150,6 +150,8 @@ fun_plot <- function(x, var_ls, plotname, dur = "month") {
   # 循环作图并存储
   if (dur == "month") {
     for (i in var_ls) {
+      # 将年份设置为因子以便分别赋予颜色
+      x$year <- factor(x$year)
       plot_ls[[i]] <- ggplot(x) +
         geom_line(aes_string("month", i, color = "year")) +
         scale_color_manual(values = c("2019" = "#00AF64", "2020" = "#bf5930")) +
