@@ -581,34 +581,56 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
 
 # 函数：AOV统计分析
 # 输入：各城市各用户各年份各项指标数据框
-fun_aov <- function(x) {
+
+
+fun_aov <- function(x, testvar) {
+
+
   # 仅保留2019-2020年的数据
   x <- subset(x, year %in% c(2019, 2020))
   # 由于第3用户组出现样本不足的情况，将其和第2用户组合并
   x$rec_yr_grp[which(x$rec_yr_grp == 3)] <- 2
+
+  # 将原数据根据用户分成两个数据
+  x1 <- subset(x, rec_yr_grp == 1)
+  x2 <- subset(x, rec_yr_grp == 2)
+
   # 按照城市和用户组分成分组列表
-  x_ls <- split(x, x$city)
-  x_ls <- lapply(x_ls, function(y) {split(y, f = y$rec_yr_grp)})
-  # 分城市分年份对各项指标~用户分组进行AOV检验
-  for (j in c("obs", "act_days", "obs_pd")) {
-    cat("\n", j, "\n")
-    for (i in names(record)) {
-      cat("\n", i, "\n")
-      lapply(x_ls[[i]], function(y){
-        if (length(unique(y$year)) >= 2) {
-          print(summary(aov(
-            formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] < 0.05)
-        } else {
-          print("Less than 2 factors.")
-        }
+  x1_ls <- split(x1, f = x1$city)
+  x2_ls <- split(x2, f = x2$city)
+
+  # 内置函数：对某一用户组检验同一指标不同年份是否有差异
+  # 输入：按城市分组的各元素为数据框的列表
+  funin_plot <- function(z, plottitle) {
+    # 建立空列表以存储结果
+    x_output <- vector("list", 3)
+    names(x_output) <- c("obs", "act_days", "obs_pd")
+
+    for (j in testvar) {
+      aov_ls <- lapply(z, function(y){
+        summary(aov(
+          formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] > 0.05
       })
+      x_output[[j]] <- Reduce(rbind, aov_ls)
     }
+
+    # 将结果列表合并为数据框
+    x_output <- Reduce(cbind, x_output)
+    x_output <- as.data.frame(x_output)
+    x_output <- cbind(names(x_ls), x_output)
+    names(x_output) <- c("city", testvar)
+    rownames(x_output) <- NULL
+    print(x_output)
+
+    # 结果可视化
+    print(ggplot(melt(x_output, id = "city")) +
+            geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.6) +
+            theme(axis.text.x = element_text(angle = 90)) +
+            labs(title = plottitle))
   }
+  funin_plot(x1_ls, plottitle = "grp = 1")
+  funin_plot(x2_ls, plottitle = "grp = 2")
 }
 
-fun_aov(user_yrdata)
-
-## Identify behavior ----
-# 在年度总图中有参与鉴定用户数和观测鉴定率的分析
-# 结论：2020年鉴定率升高的城市只是少数
+fun_aov(user_yrdata, testvar = c("obs", "act_days", "obs_pd"))
 
