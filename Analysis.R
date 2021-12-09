@@ -458,8 +458,6 @@ fun_corcovid(x = tot_mthdata_seqchg_chg_1920,
 # 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用
 # 户和其他用户在疫情期间的表现有何差异
 
-## Observation of active users ----
-
 # 尝试2：
 # 定义活跃用户为2016-2020年间2年有上传记录的用户
 
@@ -577,37 +575,37 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
   facet_grid(year ~ city, scales = "free_y")
 # 视觉判断：相比上一种尝试，区分效果差不多，结果图像略右偏，右边的样本量减少
 
+# 合并用户分组再看效果
+user_yrdata$rec_yr_grp_less <- user_yrdata$rec_yr_grp
+user_yrdata$rec_yr_grp_less[which(user_yrdata$rec_yr_grp >= 2)] <- 2
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp_less), obs)) +
+  facet_wrap(.~ city, scales = "free")
+ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp_less), act_days)) +
+  facet_wrap(.~ city, scales = "free")
+
 # 统计分析
-
 # 函数：AOV统计分析
+# 功能：检测分用户组分城市分指标检测同一指标在不同年份的差异
 # 输入：各城市各用户各年份各项指标数据框
-
-
 fun_aov <- function(x, testvar) {
-
-
   # 仅保留2019-2020年的数据
   x <- subset(x, year %in% c(2019, 2020))
   # 由于第3用户组出现样本不足的情况，将其和第2用户组合并
   x$rec_yr_grp[which(x$rec_yr_grp == 3)] <- 2
 
-  # 将原数据根据用户分成两个数据
-  x1 <- subset(x, rec_yr_grp == 1)
-  x2 <- subset(x, rec_yr_grp == 2)
-
   # 按照城市和用户组分成分组列表
-  x1_ls <- split(x1, f = x1$city)
-  x2_ls <- split(x2, f = x2$city)
+  x_ls <- split(x, f = x$city)
 
   # 内置函数：对某一用户组检验同一指标不同年份是否有差异
   # 输入：按城市分组的各元素为数据框的列表
-  funin_plot <- function(z, plottitle) {
+  for (i in c(1, 2)) {
     # 建立空列表以存储结果
     x_output <- vector("list", 3)
     names(x_output) <- c("obs", "act_days", "obs_pd")
 
     for (j in testvar) {
-      aov_ls <- lapply(z, function(y){
+      aov_ls <- lapply(x_ls, function(y){
+        y <- subset(y, rec_yr_grp == i)
         summary(aov(
           formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] > 0.05
       })
@@ -626,11 +624,46 @@ fun_aov <- function(x, testvar) {
     print(ggplot(melt(x_output, id = "city")) +
             geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.6) +
             theme(axis.text.x = element_text(angle = 90)) +
-            labs(title = plottitle))
+            labs(title = paste("grp:", i)))
   }
-  funin_plot(x1_ls, plottitle = "grp = 1")
-  funin_plot(x2_ls, plottitle = "grp = 2")
 }
 
 fun_aov(user_yrdata, testvar = c("obs", "act_days", "obs_pd"))
+
+# 通过盒形图可视化
+fun_plot <- function(x, var_ls, plotname, dur = "month") {
+  # 构建存放图片的列表
+  plot_ls <- vector("list", length(var_ls))
+  names(plot_ls) <- var_ls
+
+  # 循环作图并存储
+  for (i in 1:length(var_ls)) {
+    plot_ls[[i]] <- ggplot(x) +
+      geom_boxplot(aes_string("year", var_ls[i])) +
+      theme(axis.text.x = element_text(angle = 90)) +
+      labs(title = plotname[i], y = NULL, x = "") +
+      facet_wrap(.~ city, nrow = 1, scales = "free")
+  }
+  return(plot_ls)
+}
+
+plot_ls <- c(
+  fun_plot(subset(user_yrdata, rec_yr_grp_less == 1 &
+                    year %in% c("2019", "2020")),
+           var_ls = c("obs", "act_days", "obs_pd"),
+           plotname = c("(a) Grp 1: Observation",
+                        "(c) Grp 1: Active days",
+                        "(e) Grp 1: Observation per day")),
+  fun_plot(subset(user_yrdata, rec_yr_grp_less == 2 &
+                    year %in% c("2019", "2020")),
+           var_ls = c("obs", "act_days", "obs_pd", "obs_pd"),
+           plotname = c("(b) Grp 2: Observation",
+                        "(d) Grp 2: Active days",
+                        "(f) Grp 1: Observation per day"))
+)
+
+png(filename = "用户组对比.png", res = 300,
+    width = 3000, height = 4500)
+Reduce("/", plot_ls[c(1, 4, 2, 5, 3, 6)])
+dev.off()
 
