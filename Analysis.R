@@ -607,7 +607,7 @@ fun_aov <- function(x, testvar) {
       aov_ls <- lapply(x_ls, function(y){
         y <- subset(y, rec_yr_grp == i)
         summary(aov(
-          formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] > 0.05
+          formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] < 0.05
       })
       x_output[[j]] <- Reduce(rbind, aov_ls)
     }
@@ -630,40 +630,101 @@ fun_aov <- function(x, testvar) {
 
 fun_aov(user_yrdata, testvar = c("obs", "act_days", "obs_pd"))
 
-# 通过盒形图可视化
-fun_plot <- function(x, var_ls, plotname, dur = "month") {
-  # 构建存放图片的列表
-  plot_ls <- vector("list", length(var_ls))
-  names(plot_ls) <- var_ls
-
-  # 循环作图并存储
-  for (i in 1:length(var_ls)) {
-    plot_ls[[i]] <- ggplot(x) +
-      geom_boxplot(aes_string("year", var_ls[i])) +
-      theme(axis.text.x = element_text(angle = 90)) +
-      labs(title = plotname[i], y = NULL, x = "") +
-      facet_wrap(.~ city, nrow = 1, scales = "free")
-  }
-  return(plot_ls)
+# 通过均值误差图可视化
+# 函数：对用户年度数据按用户组分成几个数据框
+# 输入：各城市各用户各年份多指标数据框
+# 输出：按用户组分元素数据框所组成的列表
+fun_pagrp_split <- function(x) {
+  # 仅保留2019和2020年的数据
+  x <- subset(x, year %in% c("2019", "2020"))
+  x_ls <- split(x, x$rec_yr_grp)
 }
 
-plot_ls <- c(
-  fun_plot(subset(user_yrdata, rec_yr_grp_less == 1 &
-                    year %in% c("2019", "2020")),
-           var_ls = c("obs", "act_days", "obs_pd"),
-           plotname = c("(a) Grp 1: Observation",
-                        "(c) Grp 1: Active days",
-                        "(e) Grp 1: Observation per day")),
-  fun_plot(subset(user_yrdata, rec_yr_grp_less == 2 &
-                    year %in% c("2019", "2020")),
-           var_ls = c("obs", "act_days", "obs_pd", "obs_pd"),
-           plotname = c("(b) Grp 2: Observation",
-                        "(d) Grp 2: Active days",
-                        "(f) Grp 1: Observation per day"))
+user_yrdata_1920 <- subset(user_yrdata, year %in% c("2019", "2020"))
+
+user_yrdata_1920_ls <- vector("list", 6)
+
+testvar <- data.frame(
+  rec_yr_grp_less = rep(c(1, 2), 3),
+  tarvar = rep(c("obs", "act_days", "obs_pd"), each = 2)
 )
 
-png(filename = "用户组对比.png", res = 300,
-    width = 3000, height = 4500)
-Reduce("/", plot_ls[c(1, 4, 2, 5, 3, 6)])
+for (i in 1:6) {
+  user_yrdata_1920_ls[[i]] <-
+    subset(user_yrdata_1920, rec_yr_grp_less == testvar$rec_yr_grp_less[i],
+           select = c("city", "user", "year", "rec_yr_grp_less",
+                      as.character(testvar$tarvar[i])))
+  names(user_yrdata_1920_ls[[i]]) <-
+    c("city", "user", "year", "rec_yr_grp_less", "tarvar")
+}
+
+
+# 函数：分组计算输入数据的样本量、均值、SD、SE和统计检验结果等
+# 输入：2019和2020年某个用户组数据框，需要进行计算的指标名称
+# 输出：各城市统计整理后的数据框
+fun_meanse_calc <- function(x) {
+  # 先分别计算样本量、均值、SD再合并起来
+  funin_aggregate <- function(x, name_calc, name_newvar) {
+    xin_output <- aggregate(tarvar ~ city + year, data = x, FUN = name_calc)
+    names(xin_output)[3] <- name_newvar
+    xin_output
+  }
+  x_n <- funin_aggregate(x, "length", "n")
+  x_mean <- funin_aggregate(x, "mean", "mean")
+  x_sd <- funin_aggregate(x, "sd", "sd")
+  x_output <- Reduce(merge, list(x_n, x_mean, x_sd))
+
+  # 计算SE
+  x_output$se <- x_output$sd / sqrt(x_output$n)
+
+  # 统计检测两个年份差异是否显著
+  x_aov <- vector("logical")
+  for (i in unique(x$city)) {
+    x_aov <- c(x_aov, summary(aov(formula = tarvar ~ year,
+                                  data = subset(x, city == i)))[[1]]$`Pr(>F)`[1] < 0.05)
+  }
+  x_aov <- data.frame(city = unique(x$city), aov = x_aov)
+
+  # 合并统计结果到输出数据框
+  x_output <- merge(x_output, x_aov, all.x = TRUE)
+  x_output$aov_mark <- NA
+  x_output$aov_mark[x_output$aov] <- "*"
+
+  # 只留下每个城市两个年份中均值+SE之和较大一行对应的统计检验结果以便作图
+  x_output$sum_mean_se <- x_output$mean + x_output$se
+  x_output <- x_output[order(x_output$city, x_output$sum_mean_se), ]
+  delete_aov_mark <- c(1:nrow(x_output))[as.logical(1:nrow(x_output) %% 2)]
+  x_output$aov_mark[delete_aov_mark] <- NA
+
+  return(x_output)
+}
+
+user_yrdata_1920_ls_smry <- lapply(user_yrdata_1920_ls, fun_meanse_calc)
+
+plot_ls <- lapply(
+  user_yrdata_1920_ls_smry,
+  function(y) {
+    ggplot(y, aes(city, mean, color = year)) +
+      geom_point(position = position_dodge(.2)) +
+      geom_errorbar(aes(ymin = mean - se, ymax = mean + se,
+                        width = 0.2),
+                    position = position_dodge(.2)) +
+      geom_text(aes(x = city, y = (mean + se)*1.05, label = aov_mark),
+                color = "black", size = 5) +
+      scale_color_manual(values = c("2019" = "#00AF64", "2020" = "#bf5930")) +
+      scale_y_continuous(limits = c(0, max(y$mean + y$se)*1.1)) +
+      theme(axis.title = element_blank())
+  }
+)
+
+for (i in 1:6) {
+  plot_ls[[i]] <- plot_ls[[i]] +
+    labs(title = paste("Group", testvar$rec_yr_grp_less[i], testvar$tarvar[i]))
+}
+
+png(filename = "分用户组同指标不同年份对比.png", res = 300,
+    width = 2000, height = 3500)
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 
