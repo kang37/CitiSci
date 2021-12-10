@@ -583,7 +583,86 @@ ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp_less), obs)) +
 ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp_less), act_days)) +
   facet_wrap(.~ city, scales = "free")
 
-# 统计分析
+# 统计检验分指标各城市跨用户组差异
+user_yrdata_ls <- vector("list", 3)
+testvar <- c("obs", "act_days", "obs_pd")
+for (i in 1:3) {
+  user_yrdata_ls[[i]] <-
+    subset(user_yrdata,
+           select = c("city", "user", "year", "rec_yr_grp_less", testvar[i]))
+  names(user_yrdata_ls[[i]]) <-
+    c("city", "user", "year", "rec_yr_grp_less", "tarvar")
+}
+
+fun_meanse_calc <- function(x, name_var = "year") {
+  # 先分别计算样本量、均值、SD再合并起来
+  funin_aggregate <- function(x, name_calc, name_newvar) {
+    xin_output <- aggregate(tarvar ~ city + rec_yr_grp_less,
+                            data = x, FUN = name_calc)
+    names(xin_output)[3] <- name_newvar
+    xin_output
+  }
+  x_n <- funin_aggregate(x, "length", "n")
+  x_mean <- funin_aggregate(x, "mean", "mean")
+  x_sd <- funin_aggregate(x, "sd", "sd")
+  x_output <- Reduce(merge, list(x_n, x_mean, x_sd))
+
+  # 计算SE
+  x_output$se <- x_output$sd / sqrt(x_output$n)
+
+  # 统计检测两个年份差异是否显著
+  x_aov <- vector("logical")
+  for (i in unique(x$city)) {
+    x_city <- subset(x, city == i)
+    x_aov <-
+      c(x_aov,
+        summary(
+          aov(formula = x_city$tarvar ~
+                x_city[, name_var]))[[1]]$`Pr(>F)`[1] < 0.05)
+  }
+  x_aov <- data.frame(city = unique(x$city), aov = x_aov)
+
+  # 合并统计结果到输出数据框
+  x_output <- merge(x_output, x_aov, all.x = TRUE)
+  x_output$aov_mark <- NA
+  x_output$aov_mark[x_output$aov] <- "*"
+
+  # 只留下每个城市两个年份中均值+SE之和较大一行对应的统计检验结果以便作图
+  x_output$sum_mean_se <- x_output$mean + x_output$se
+  x_output <- x_output[order(x_output$city, x_output$sum_mean_se), ]
+  delete_aov_mark <- c(1:nrow(x_output))[as.logical(1:nrow(x_output) %% 2)]
+  x_output$aov_mark[delete_aov_mark] <- NA
+
+  return(x_output)
+}
+fun_meanse_calc(x = user_yrdata_ls[[1]], name_var = "rec_yr_grp_less")
+user_yrdata_ls_smry <-
+  lapply(user_yrdata_ls, fun_meanse_calc, name_var = "rec_yr_grp_less")
+
+plot_ls <- lapply(
+  user_yrdata_ls_smry,
+  function(y) {
+    ggplot(y, aes(city, mean, color = factor(rec_yr_grp_less))) +
+      geom_point(position = position_dodge(.2)) +
+      geom_errorbar(aes(ymin = mean - se, ymax = mean + se,
+                        width = 0.2),
+                    position = position_dodge(.2)) +
+      geom_text(aes(x = city, y = (mean + se)*1.05, label = aov_mark),
+                color = "black", size = 5) +
+      scale_y_continuous(limits = c(0, max(y$mean + y$se)*1.1)) +
+      theme(axis.title = element_blank())
+  }
+)
+
+for (i in 1:3) {
+  plot_ls[[i]] <- plot_ls[[i]] +
+    labs(title = paste(testvar[i]))
+}
+
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+# 统计分析分用户组各城市各指标跨年份差异
 # 函数：AOV统计分析
 # 功能：检测分用户组分城市分指标检测同一指标在不同年份的差异
 # 输入：各城市各用户各年份各项指标数据框
@@ -662,7 +741,7 @@ for (i in 1:6) {
 # 函数：分组计算输入数据的样本量、均值、SD、SE和统计检验结果等
 # 输入：2019和2020年某个用户组数据框，需要进行计算的指标名称
 # 输出：各城市统计整理后的数据框
-fun_meanse_calc <- function(x) {
+fun_meanse_calc <- function(x, name_var = "year") {
   # 先分别计算样本量、均值、SD再合并起来
   funin_aggregate <- function(x, name_calc, name_newvar) {
     xin_output <- aggregate(tarvar ~ city + year, data = x, FUN = name_calc)
@@ -680,8 +759,12 @@ fun_meanse_calc <- function(x) {
   # 统计检测两个年份差异是否显著
   x_aov <- vector("logical")
   for (i in unique(x$city)) {
-    x_aov <- c(x_aov, summary(aov(formula = tarvar ~ year,
-                                  data = subset(x, city == i)))[[1]]$`Pr(>F)`[1] < 0.05)
+    x_city <- subset(x, city == i)
+    x_aov <-
+      c(x_aov,
+        summary(
+          aov(formula = x_city$tarvar ~
+                x_city[, name_var]))[[1]]$`Pr(>F)`[1] < 0.05)
   }
   x_aov <- data.frame(city = unique(x$city), aov = x_aov)
 
