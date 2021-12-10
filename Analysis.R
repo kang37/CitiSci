@@ -582,8 +582,11 @@ for (i in 1:3) {
     labs(title = paste(testvar[i]))
 }
 
+png(filename = "分指标各城市跨用户组对比.png", res = 300,
+    width = 2000, height = 3500)
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
 
 ## Fac: metrics + user grp; metric ~ year 19-20 ----
 # 目标：检验新冠对新用户还是老用户影响更大
