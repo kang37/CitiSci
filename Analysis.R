@@ -454,12 +454,8 @@ fun_corcovid(x = tot_mthdata_seqchg_chg_1920,
                          "idpa", "id_rate"),
              covid_df = covid_monthly)
 
-# User behavior ----
-# 参与者人均和日均观测数的分析已在前面展示过，此处对参与者进行分组分析，看活跃用
-# 户和其他用户在疫情期间的表现有何差异
-
-# 尝试2：
-# 定义活跃用户为2016-2020年间2年有上传记录的用户
+# User group analysis ----
+# 对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
 
 # 函数：输出各用户各年份观测数、活跃天数及日均观测数
 fun_smrydata <- function(x) {
@@ -493,69 +489,9 @@ fun_smrydata <- function(x) {
   return(x_output)
 }
 
-# 标注活跃参与者并比较不同组用户的每年行为差异
-# 函数：给各城市用户分组，标注活跃用户
-# 输入：各城市各用户各年份观测数等数据框
-fun_actpa <- function(x) {
-  # 生成各城市活跃参与者名单
-  actpa <- aggregate(obs ~ city + user, x, FUN = "length")
-  names(actpa) <- c("city", "user", "rec_yr")
-  actpa$actpa <- actpa$rec_yr >= 2
-
-  # 标注输入数据中的活跃参与者
-  x <- merge(x, actpa, by = c("city", "user"), all.x = TRUE)
-
-  return(x)
-}
-
 user_yrdata <- fun_ls2df(lapply(record, fun_smrydata))
-user_yrdata <- fun_actpa(user_yrdata)
 
-# 查看不同分组观测数或活跃天数的差异
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
-  facet_wrap(.~ city, scales = "free_y")
-# 视觉上判断：对于其中6个城市来说，上传年数高的参与者观察数也多
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
-  facet_wrap(.~ city, scales = "free_y")
-# 视觉上判断：对于其中9个城市，上传年数高的参与者活跃天数也较高
-ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, obs)) +
-  facet_wrap(.~ city, scales = "free")
-# 视觉上判断：区分效果不如上传年数好，但是也有4个左右城市活跃用户的上传数显示稍高
-ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, act_days)) +
-  facet_wrap(.~ city, scales = "free")
-# 视觉上判断：区分效果不如上传年数好，但是也有5个左右城市活跃用户的活跃天数显示
-# 稍高
-
-# 加入年份分组看看
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), obs)) +
-  facet_grid(year ~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr), act_days)) +
-  facet_grid(year ~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, obs)) +
-  facet_grid(year ~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = actpa, act_days)) +
-  facet_grid(year ~ city, scales = "free_y")
-# 视觉判断：似乎区分效果反而不如不加年份的好
-
-# 考虑组内样本数不足的问题，分成3个组试试看：1年，2年，3年及以上
-user_yrdata$rec_yr_grp <- user_yrdata$rec_yr
-user_yrdata$rec_yr_grp[which(user_yrdata$rec_yr >= 3)] <- 3
-
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
-  facet_grid(year ~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
-  facet_grid(year ~ city, scales = "free_y")
-# 问题：有没有可能在疫情下不同用户之间的差异反而变大了？
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
-  facet_wrap(.~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
-  facet_wrap(.~ city, scales = "free_y")
-# 视觉判断：相比观测数，不同分组用户的活跃天数差异更大
-
-
-# 尝试3：
 # 分组：根据用户是第几年参与进行分组-第1年，第2年，第3年及以上
-user_yrdata <- fun_ls2df(lapply(record, fun_smrydata))
 user_yrdata$rec_yr <-
   ave(as.numeric(user_yrdata$year),
       list(user_yrdata$user, user_yrdata$city), FUN = seq_along)
@@ -563,25 +499,9 @@ user_yrdata$rec_yr_grp <-
   user_yrdata$rec_yr
 user_yrdata$rec_yr_grp[which(user_yrdata$rec_yr >= 3)] <- 3
 
-# 查看不同分组观测数或活跃天数的差异
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
-  facet_wrap(.~ city, scales = "free")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
-  facet_wrap(.~ city, scales = "free")
-# 加入年份分组
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), obs)) +
-  facet_grid(year ~ city, scales = "free_y")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp), act_days)) +
-  facet_grid(year ~ city, scales = "free_y")
-# 视觉判断：相比上一种尝试，区分效果差不多，结果图像略右偏，右边的样本量减少
-
-# 合并用户分组再看效果
+# 另一种分组：根据用户是第几年参与进行分组-第1年，第2年，第3年及以上
 user_yrdata$rec_yr_grp_less <- user_yrdata$rec_yr_grp
 user_yrdata$rec_yr_grp_less[which(user_yrdata$rec_yr_grp >= 2)] <- 2
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp_less), obs)) +
-  facet_wrap(.~ city, scales = "free")
-ggplot(user_yrdata) + geom_boxplot(aes(x = factor(rec_yr_grp_less), act_days)) +
-  facet_wrap(.~ city, scales = "free")
 
 # 统计检验分指标各城市跨用户组差异
 user_yrdata_ls <- vector("list", 3)
@@ -662,54 +582,7 @@ for (i in 1:3) {
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
-# 统计分析分用户组各城市各指标跨年份差异
-# 函数：AOV统计分析
-# 功能：检测分用户组分城市分指标检测同一指标在不同年份的差异
-# 输入：各城市各用户各年份各项指标数据框
-fun_aov <- function(x, testvar) {
-  # 仅保留2019-2020年的数据
-  x <- subset(x, year %in% c(2019, 2020))
-  # 由于第3用户组出现样本不足的情况，将其和第2用户组合并
-  x$rec_yr_grp[which(x$rec_yr_grp == 3)] <- 2
-
-  # 按照城市和用户组分成分组列表
-  x_ls <- split(x, f = x$city)
-
-  # 内置函数：对某一用户组检验同一指标不同年份是否有差异
-  # 输入：按城市分组的各元素为数据框的列表
-  for (i in c(1, 2)) {
-    # 建立空列表以存储结果
-    x_output <- vector("list", 3)
-    names(x_output) <- c("obs", "act_days", "obs_pd")
-
-    for (j in testvar) {
-      aov_ls <- lapply(x_ls, function(y){
-        y <- subset(y, rec_yr_grp == i)
-        summary(aov(
-          formula = y[, j] ~ y$year))[[1]]$`Pr(>F)`[1] < 0.05
-      })
-      x_output[[j]] <- Reduce(rbind, aov_ls)
-    }
-
-    # 将结果列表合并为数据框
-    x_output <- Reduce(cbind, x_output)
-    x_output <- as.data.frame(x_output)
-    x_output <- cbind(names(x_ls), x_output)
-    names(x_output) <- c("city", testvar)
-    rownames(x_output) <- NULL
-    print(x_output)
-
-    # 结果可视化
-    print(ggplot(melt(x_output, id = "city")) +
-            geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.6) +
-            theme(axis.text.x = element_text(angle = 90)) +
-            labs(title = paste("grp:", i)))
-  }
-}
-
-fun_aov(user_yrdata, testvar = c("obs", "act_days", "obs_pd"))
-
-# 通过均值误差图可视化
+# 通过均值误差图可视化分用户组分指标各城市跨2019-2020年对比
 # 函数：对用户年度数据按用户组分成几个数据框
 # 输入：各城市各用户各年份多指标数据框
 # 输出：按用户组分元素数据框所组成的列表
