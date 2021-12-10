@@ -457,6 +457,7 @@ fun_corcovid(x = tot_mthdata_seqchg_chg_1920,
 # User group analysis ----
 # 对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
 
+# Data construction ----
 # 函数：输出各用户各年份观测数、活跃天数及日均观测数
 fun_smrydata <- function(x) {
   # 从日期中提取年月数据
@@ -503,6 +504,8 @@ user_yrdata$rec_yr_grp[which(user_yrdata$rec_yr >= 3)] <- 3
 user_yrdata$rec_yr_grp_less <- user_yrdata$rec_yr_grp
 user_yrdata$rec_yr_grp_less[which(user_yrdata$rec_yr_grp >= 2)] <- 2
 
+# Fac: metrics + city; metric ~ user grps ----
+# 目标：证明历年老用户均比新用户更活跃
 # 统计检验分指标各城市跨用户组差异
 user_yrdata_ls <- vector("list", 3)
 testvar <- c("obs", "act_days", "obs_pd")
@@ -582,6 +585,8 @@ for (i in 1:3) {
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
+# Fac: metrics + user grp; metric ~ year 19-20 ----
+# 目标：检验新冠对新用户还是老用户影响更大
 # 通过均值误差图可视化分用户组分指标各城市跨2019-2020年对比
 # 函数：对用户年度数据按用户组分成几个数据框
 # 输入：各城市各用户各年份多指标数据框
