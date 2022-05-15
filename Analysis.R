@@ -1,59 +1,68 @@
 library(lubridate)
+library(openxlsx)
+library(dplyr)
 library(ggplot2)
 library(patchwork)
 library(reshape2)
-library(openxlsx)
+
+# Settings ----
+set_pptfigure <- TRUE
 
 # Read data ----
 ## Prefectures and cities ----
-pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx")
-pre_city <- pre_city[is.na(pre_city$city_en) == FALSE, ]
+pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
+  subset(!is.na(city_en)) %>%
+  rename(prefecture = prefecture_en, city = city_en)
 
 ## Raw iNaturalist data ----
-filenames <- list.files("RawData/iNatData")
-filenames <- grep(".csv", filenames, value = TRUE)
+filenames <- list.files("RawData/iNatData") %>%
+  grep(".csv", x = ., value = TRUE)
 
 # a new list to store raw data
 record <- vector("list", length = length(filenames))
 names(record) <- gsub(".csv", "", filenames)
 
 for (i in 1:length(filenames)) {
-  record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i]))
-  # 生成年月日数据
-  record[[i]][, "observed_on"] <- as.Date(record[[i]][, "observed_on"])
-  record[[i]][, "year"] <- year(record[[i]][, "observed_on"])
-  record[[i]][, "month"] <- month(record[[i]][, "observed_on"])
-  record[[i]][, "day"] <- day(record[[i]][, "observed_on"])
-  # 由于有些城市只有2016年及之后的数据，所以就保留共同数据
-  record[[i]] <- subset(record[[i]], year > 2015)
+  record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i])) %>%
+    # 生成年月日数据
+    mutate(observed_on = as.Date(observed_on),
+           year = year(observed_on),
+           month = month(observed_on),
+           day = day(observed_on)) %>%
+    # 由于有些城市只有2016年及之后的数据，所以就保留共同数据
+    subset(year > 2015)
 }
 
 ## COVID-19 data ----
+# 基本结论：
 # 基本上从二月~四月开始受影响
 # 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
-# 各县感染者数量
-covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv")
-covid <- covid[c("日付", "都道府県名", "各地の感染者数_1日ごとの発表数")]
-names(covid) <- c("date", "prefecture", "number")
 
-covid <-
-  covid[which(covid$prefecture %in% pre_city$prefecture_jp), ]
-covid <- merge(covid, pre_city, by.x = "prefecture", by.y = "prefecture_jp")
+# 读取数据：日期，县，各感染者数量
+# bug：此处把县和城市信息加进去后可能会引起误解，误以为感染者人数是各城市的感染
+# 者人数，但实际上感染者人数是所在县的感染者人数-人受信息的影响可能存在尺度效应
+covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv") %>%
+  rename(date = 日付, prefecture_jp = 都道府県名,
+         number = `各地の感染者数_1日ごとの発表数`) %>%
+  as_tibble() %>%
+  select(date, prefecture_jp, number) %>%
+  # 筛选出目标县
+  subset(prefecture_jp %in% pre_city$prefecture_jp) %>%
+  # 加入县英文名和城市名信息
+  left_join(pre_city, by = "prefecture_jp") %>%
+  # 更改数据类型
+  mutate(date = as.Date(date)) %>%
+  mutate(year = year(date), month = month(date)) %>%
+  # 保留2020年的数据
+  subset(year == 2020)
 
-covid$date <- as.Date(covid$date)
-covid[, "year"] <- year(covid$date)
-covid[, "month"] <- month(covid$date)
-covid <- covid[which(covid$year == "2020"), ]
-
-covid_monthly <- aggregate(covid$number, by = list(covid$prefecture_en, covid$month),
-                           FUN = "sum")
-names(covid_monthly) <- c("prefecture", "month", "number")
-# 权宜之计：按照从北到南对城市进行排序
-covid_monthly$prefecture <-
-  factor(covid_monthly$prefecture, levels = unique(pre_city$prefecture_en))
-# 合并城市所属县的数据
-covid_monthly <-
-  merge(covid_monthly, pre_city, by.x = "prefecture", by.y = "prefecture_en")
+covid_monthly <- covid %>%
+  group_by(prefecture, city, month) %>%
+  summarise(number = sum(number)) %>%
+  ungroup() %>%
+  # bug：权宜之计：按照从北到南对城市进行排序
+  mutate(prefecture =
+           factor(prefecture, levels = unique(pre_city$prefecture)))
 
 # Annual comparison ----
 # 函数：汇总计算记录数、活跃用户数、活跃天数等数据
@@ -177,9 +186,9 @@ fun_plot <- function(x, var_ls, plotname, dur = "month") {
   return(plot_ls)
 }
 
-tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year"))
-# 生成年份缩写列用于作图
-tot_yrdata$yr_sht <- tot_yrdata$year - 2000
+tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year")) %>%
+  # 生成年份缩写列用于作图
+  mutate(yr_sht = year - 2000)
 
 # 作图：各城市各指标历年变化
 plot_ls <-
@@ -242,6 +251,7 @@ cor.test(tot_yrdata$users, tot_yrdata$idpa)
 # 虽然按城市分组的话，每个城市只有5个样本，但是也可以看看情况如何
 lapply(split(tot_yrdata, tot_yrdata$city),
        function(x) {cor.test(x$user, x$idpa)})
+# bug：
 # 检测结果发现，一些既往研究认为公民科学由室外转向室内，但是该分析表明两者同增
 # 共减，可以作为检验“新冠期间公民科学由室外转向室内”假说的参考，但是这里有点逻
 # 辑问题：无法准确说明2019-2020的情况。
@@ -691,4 +701,7 @@ png(filename = "分用户组同指标不同年份对比.png", res = 300,
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
+if (set_pptfigure) {
+  source("Figure_metric_year_group.R")
+}
 
