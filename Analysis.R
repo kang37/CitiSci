@@ -330,6 +330,7 @@ kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
            "Kobe", "Kawasaki", "Kyoto", "Saitama", "Hiroshima")
 
 ## Prefectures and cities ----
+### Raw data ----
 pref.city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
   tibble() %>%
   # 保留本研究的目标城市
@@ -337,6 +338,20 @@ pref.city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
   rename(prefecture = prefecture_en, city = city_en) %>%
   # 按照城市人口从多到少排序
   mutate(city = factor(city, levels = kCity))
+
+### Yearly data ----
+# 各城市各年份观测数等数据
+record.city.yr <- lapply(record.raw, SmryData, dur = "year") %>%
+  CityLs2Df() %>%
+  tibble() %>%
+  # 生成年份缩写列用于作图
+  mutate(yr_sht = year - 2000)
+
+### Monthly data ----
+# 构建各年份月度数据
+record.city.mth <- lapply(record.raw, SmryData, dur = "month") %>%
+  CityLs2Df() %>%
+  tibble()
 
 ## Raw iNaturalist data ----
 # 读取公民科学各条记录文件并合成一个列表，列表的各元素分别为各个城市的数据
@@ -373,13 +388,6 @@ covid.mth <-
 
 # Analysis ----
 ## Annual comparison ----
-# 各城市各年份观测数等数据
-record.city.yr <- lapply(record.raw, SmryData, dur = "year") %>%
-  CityLs2Df() %>%
-  tibble() %>%
-  # 生成年份缩写列用于作图
-  mutate(yr_sht = year - 2000)
-
 # 作图：各城市各指标历年变化
 png(filename = "ProcData/历年各项指标变化.png", res = 300,
     width = 3000, height = 4500)
@@ -422,11 +430,6 @@ lapply(split(record.city.yr, record.city.yr$city),
 
 ## Monthly comparison ----
 ### General comparison of 2016-2020 and 2019-2020 ----
-# 构建各年份月度数据
-record.city.mth <- lapply(record.raw, SmryData, dur = "month") %>%
-  CityLs2Df() %>%
-  tibble()
-
 png(filename = "ProcData/历年各月各项指标变化.png", res = 300,
     width = 3000, height = 4500)
 SerPlot(
