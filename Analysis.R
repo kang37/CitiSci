@@ -1,70 +1,18 @@
-library(lubridate)
+# Statement ----
+# 用于分析新冠对公民科学行为的影响，主要思路：从年度和月度粒度上分析，然后分用户组进行分析。
+
+# Package ----
 library(openxlsx)
 library(dplyr)
 library(ggplot2)
 library(patchwork)
 library(reshape2)
+library(lubridate)
 
-# Settings ----
+# Setting ----
 set_pptfigure <- TRUE
 
-# Read data ----
-## Prefectures and cities ----
-pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
-  subset(!is.na(city_en)) %>%
-  rename(prefecture = prefecture_en, city = city_en)
-
-## Raw iNaturalist data ----
-filenames <- list.files("RawData/iNatData") %>%
-  grep(".csv", x = ., value = TRUE)
-
-# a new list to store raw data
-record <- vector("list", length = length(filenames))
-names(record) <- gsub(".csv", "", filenames)
-
-for (i in 1:length(filenames)) {
-  record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i])) %>%
-    # 生成年月日数据
-    mutate(observed_on = as.Date(observed_on),
-           year = year(observed_on),
-           month = month(observed_on),
-           day = day(observed_on)) %>%
-    # 由于有些城市只有2016年及之后的数据，所以就保留共同数据
-    subset(year > 2015)
-}
-
-## COVID-19 data ----
-# 基本结论：
-# 基本上从二月~四月开始受影响
-# 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
-
-# 读取数据：日期，县，各感染者数量
-# bug：此处把县和城市信息加进去后可能会引起误解，误以为感染者人数是各城市的感染
-# 者人数，但实际上感染者人数是所在县的感染者人数-人受信息的影响可能存在尺度效应
-covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv") %>%
-  rename(date = 日付, prefecture_jp = 都道府県名,
-         number = `各地の感染者数_1日ごとの発表数`) %>%
-  as_tibble() %>%
-  select(date, prefecture_jp, number) %>%
-  # 筛选出目标县
-  subset(prefecture_jp %in% pre_city$prefecture_jp) %>%
-  # 加入县英文名和城市名信息
-  left_join(pre_city, by = "prefecture_jp") %>%
-  # 更改数据类型
-  mutate(date = as.Date(date)) %>%
-  mutate(year = year(date), month = month(date)) %>%
-  # 保留2020年的数据
-  subset(year == 2020)
-
-covid_monthly <- covid %>%
-  group_by(prefecture, city, month) %>%
-  summarise(number = sum(number)) %>%
-  ungroup() %>%
-  # bug：权宜之计：按照从北到南对城市进行排序
-  mutate(prefecture =
-           factor(prefecture, levels = unique(pre_city$prefecture)))
-
-# Annual comparison ----
+# Function ----
 # 函数：汇总计算记录数、活跃用户数、活跃天数等数据
 # 输入数据框：日期、user_id等信息
 fun_smrydata <- function(x, dur = "month") {
@@ -144,7 +92,7 @@ fun_smrydata <- function(x, dur = "month") {
   return(x_output)
 }
 
-# 将多城市数据合并为一个数据框
+# 函数：将多城市数据合并为一个数据框
 fun_ls2df <- function(x) {
   # 给列表中每个元素数据框加上对应的元素名
   for (i in names(x)) {
@@ -186,35 +134,6 @@ fun_plot <- function(x, var_ls, plotname, dur = "month") {
   return(plot_ls)
 }
 
-tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year")) %>%
-  # 生成年份缩写列用于作图
-  mutate(yr_sht = year - 2000)
-
-# 作图：各城市各指标历年变化
-plot_ls <-
-  fun_plot(tot_yrdata,
-           var_ls =
-             c("obs", "users", "act_days",
-               "obs_per_user",
-               "actdays_per_user",
-               "obs_pu_pd",
-               "idpa", "id_rate"),
-           plotname =
-             c("(a) Observation", "(b) Participant", "(c) Active days",
-               "(d) Observations per participant",
-               "(e) Active days per participant",
-               "(f) Observations per participant per active days",
-               "(g) Identification participant", "(h) Identification rate"),
-           dur = "year")
-png(filename = "历年各项指标变化.png", res = 300,
-    width = 3000, height = 4500)
-Reduce("/", plot_ls) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-dev.off()
-
-# 报告分析
-# 2020年出现下降的城市
-rep_tot_yrdata <- subset(tot_yrdata, year > 3)
 # 函数：对比各城市2019和2020年的数据
 # 输入：各城市各年份各项指标数值数据框
 # 输出：对于各指标2020低于2019的城市个数并可视化
@@ -243,70 +162,7 @@ fun_comp1920 <- function(x) {
     geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5) +
     theme(axis.text.x = element_text(angle = 90))
 }
-fun_comp1920(tot_yrdata)
 
-# 室内参与和室外参与的关系？
-# 检测总体数据的参与者和鉴定者数量的关系
-cor.test(tot_yrdata$users, tot_yrdata$idpa)
-# 虽然按城市分组的话，每个城市只有5个样本，但是也可以看看情况如何
-lapply(split(tot_yrdata, tot_yrdata$city),
-       function(x) {cor.test(x$user, x$idpa)})
-# bug：
-# 检测结果发现，一些既往研究认为公民科学由室外转向室内，但是该分析表明两者同增
-# 共减，可以作为检验“新冠期间公民科学由室外转向室内”假说的参考，但是这里有点逻
-# 辑问题：无法准确说明2019-2020的情况。
-
-# Monthly comparison ----
-## General comparison of 2016-2020 and 2019-2020 ----
-# 构建各年份月度数据
-tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "month"))
-png(filename = "历年各月各项指标变化.png", res = 300,
-    width = 3000, height = 4500)
-plot_ls <- fun_plot(
-  tot_mthdata,
-  var_ls =
-    c("obs", "users", "act_days",
-      "obs_per_user",
-      "actdays_per_user",
-      "obs_pu_pd",
-      "idpa", "id_rate"),
-  plotname =
-    c("(a) Observation", "(b) Participant", "(c) Active days",
-      "(d) Observations per participant",
-      "(e) Active days per participant",
-      "(f) Observations per participant per active days",
-      "(g) Identification participant", "(h) Identification rate")
-)
-Reduce("/", plot_ls) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-dev.off()
-
-# 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
-tot_mthdata_1920 <- subset(tot_mthdata, year %in% c(2019, 2020))
-
-png(filename = "19-20年各月各项指标变化.png", res = 300,
-    width = 3000, height = 4500)
-plot_ls <- fun_plot(
-  tot_mthdata_1920,
-  var_ls =
-    c("obs", "users", "act_days",
-      "obs_per_user",
-      "actdays_per_user",
-      "obs_pu_pd",
-      "idpa", "id_rate"),
-  plotname =
-    c("(a) Observation", "(b) Participant", "(c) Active days",
-      "(d) Observations per participant",
-      "(e) Active days per participant",
-      "(f) Observations per participant per active days",
-      "(g) Identification participant", "(h) Identification rate")
-  )
-Reduce("/", plot_ls) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-dev.off()
-
-## Metrics ~ COVID data ----
-# 2019-2020每月同比变化
 # 函数：计算2020年每月相比上年相同月份的变化率
 # 输入：各城市各年月的各项指标数据
 # 输出：各城市各年月的各项指标相比去年同期的变化率
@@ -324,7 +180,7 @@ fun_mthchange_1920 <- function(x) {
     x_2019[c("city", "month")],
     (x_2020[names(x_2020)[!names(x_2020) %in% c("city", "month")]] -
        x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]) /
-       x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]
+      x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]
   )
 
   # 输出数据
@@ -389,16 +245,6 @@ fun_corcovid <- function(x, testvar, covid_df) {
     geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.6)
 }
 
-# 每月各项变化
-tot_mthdata_chg_1920 <- fun_mthchange_1920(tot_mthdata)
-fun_plot_mthchg1920_covid(tot_mthdata_chg_1920)
-fun_corcovid(x = tot_mthdata_chg_1920,
-             testvar = c("obs", "users", "act_days", "obs_per_user",
-                         "actdays_per_user", "obs_pu_pd",
-                         "idpa", "id_rate"),
-             covid_df = covid_monthly)
-
-## Seq and seq-change ~ COVID ----
 # 函数：2019-2020年各项指标环比数据
 # 输入：各城市各年月的各项指标数据
 # 输出：各城市各年月的各项指标相比去年同期的变化率
@@ -440,7 +286,7 @@ fun_seqchg_1920 <- function(x) {
                                             c("city", "year", "month")])
   x_1920_pre <- subset(x_1920_pre, year %in% c(2019, 2020),
                        select = names(x_1920_pre)[!names(x_1920_pre) %in%
-                                                c("city", "year", "month")])
+                                                    c("city", "year", "month")])
 
   # 计算环比
   x_output <- cbind(x_output, (x_1920 - x_1920_pre) / x_1920_pre)
@@ -449,6 +295,170 @@ fun_seqchg_1920 <- function(x) {
   return(x_output)
 }
 
+# Read data ----
+## Prefectures and cities ----
+pre_city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
+  subset(!is.na(city_en)) %>%
+  rename(prefecture = prefecture_en, city = city_en)
+
+## Raw iNaturalist data ----
+# Get all *.csv file names in the file
+filenames <- list.files("RawData/iNatData") %>%
+  grep(".csv", x = ., value = TRUE)
+
+# a new list to store raw data
+record <- vector("list", length = length(filenames))
+names(record) <- gsub(".csv", "", filenames)
+
+for (i in 1:length(filenames)) {
+  record[[i]] <- read.csv(paste0("RawData/iNatData/", filenames[i])) %>%
+    # 生成年月日数据
+    mutate(observed_on = as.Date(observed_on),
+           year = year(observed_on),
+           month = month(observed_on),
+           day = day(observed_on)) %>%
+    # 由于有些城市只有2016年及之后的数据，所以就保留共同年份的数据
+    subset(year > 2015)
+}
+
+## COVID-19 data ----
+# 基本结论：
+# 基本上从二月~四月开始受影响
+# 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
+
+# 读取数据：日期，县，各感染者数量
+# bug：此处把县和城市信息加进去后可能会引起误解，误以为感染者人数是各城市的感染
+# 者人数，但实际上感染者人数是所在县的感染者人数-人受信息的影响可能存在尺度效应
+covid <- read.csv("RawData/nhk_news_covid19_prefectures_daily_data.csv") %>%
+  rename(date = "日付", prefecture_jp = "都道府県名",
+         number = "各地の感染者数_1日ごとの発表数") %>%
+  as_tibble() %>%
+  select(date, prefecture_jp, number) %>%
+  # 筛选出目标县
+  subset(prefecture_jp %in% pre_city$prefecture_jp) %>%
+  # 加入县英文名和城市名信息
+  left_join(pre_city, by = "prefecture_jp") %>%
+  # 更改数据类型
+  mutate(date = as.Date(date)) %>%
+  mutate(year = year(date), month = month(date)) %>%
+  # 保留2020年的数据
+  subset(year == 2020)
+
+covid_monthly <- covid %>%
+  group_by(prefecture, city, month) %>%
+  summarise(number = sum(number)) %>%
+  ungroup() %>%
+  # bug：权宜之计：按照从北到南对城市进行排序
+  mutate(prefecture =
+           factor(prefecture, levels = unique(pre_city$prefecture)))
+
+# Analysis ----
+## Annual comparison ----
+tot_yrdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "year")) %>%
+  tibble() %>%
+  # 生成年份缩写列用于作图
+  mutate(yr_sht = year - 2000)
+
+# 作图：各城市各指标历年变化
+plot_ls <-
+  fun_plot(tot_yrdata,
+           var_ls =
+             c("obs", "users", "act_days",
+               "obs_per_user",
+               "actdays_per_user",
+               "obs_pu_pd",
+               "idpa", "id_rate"),
+           plotname =
+             c("(a) Observation", "(b) Participant", "(c) Active days",
+               "(d) Observations per participant",
+               "(e) Active days per participant",
+               "(f) Observations per participant per active days",
+               "(g) Identification participant", "(h) Identification rate"),
+           dur = "year")
+png(filename = "ProcData/历年各项指标变化.png", res = 300,
+    width = 3000, height = 4500)
+(Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom"))
+dev.off()
+
+# 报告分析
+# 2020年出现下降的城市
+rep_tot_yrdata <- subset(tot_yrdata, year > 3)
+fun_comp1920(tot_yrdata)
+
+# 室内参与和室外参与的关系？
+# 检测总体数据的参与者和鉴定者数量的关系
+cor.test(tot_yrdata$users, tot_yrdata$idpa)
+# 虽然按城市分组的话，每个城市只有5个样本，但是也可以看看情况如何
+lapply(split(tot_yrdata, tot_yrdata$city),
+       function(x) {cor.test(x[["users"]], x[["idpa"]])})
+# bug：
+# 检测结果发现，一些既往研究认为公民科学由室外转向室内，但是该分析表明两者同增
+# 共减，可以作为检验“新冠期间公民科学由室外转向室内”假说的参考，但是这里有点逻
+# 辑问题：无法准确说明2019-2020的情况。
+
+## Monthly comparison ----
+### General comparison of 2016-2020 and 2019-2020 ----
+# 构建各年份月度数据
+tot_mthdata <- fun_ls2df(lapply(record, fun_smrydata, dur = "month")) %>%
+  tibble()
+png(filename = "ProcData/历年各月各项指标变化.png", res = 300,
+    width = 3000, height = 4500)
+plot_ls <- fun_plot(
+  tot_mthdata,
+  var_ls =
+    c("obs", "users", "act_days",
+      "obs_per_user",
+      "actdays_per_user",
+      "obs_pu_pd",
+      "idpa", "id_rate"),
+  plotname =
+    c("(a) Observation", "(b) Participant", "(c) Active days",
+      "(d) Observations per participant",
+      "(e) Active days per participant",
+      "(f) Observations per participant per active days",
+      "(g) Identification participant", "(h) Identification rate")
+)
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
+
+# 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
+tot_mthdata_1920 <- subset(tot_mthdata, year %in% c(2019, 2020))
+
+png(filename = "ProcData/19-20年各月各项指标变化.png", res = 300,
+    width = 3000, height = 4500)
+plot_ls <- fun_plot(
+  tot_mthdata_1920,
+  var_ls =
+    c("obs", "users", "act_days",
+      "obs_per_user",
+      "actdays_per_user",
+      "obs_pu_pd",
+      "idpa", "id_rate"),
+  plotname =
+    c("(a) Observation", "(b) Participant", "(c) Active days",
+      "(d) Observations per participant",
+      "(e) Active days per participant",
+      "(f) Observations per participant per active days",
+      "(g) Identification participant", "(h) Identification rate")
+  )
+Reduce("/", plot_ls) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
+
+### Metrics ~ COVID data ----
+# 2019-2020每月同比变化
+# 每月各项变化
+tot_mthdata_chg_1920 <- fun_mthchange_1920(tot_mthdata)
+fun_plot_mthchg1920_covid(tot_mthdata_chg_1920)
+fun_corcovid(x = tot_mthdata_chg_1920,
+             testvar = c("obs", "users", "act_days", "obs_per_user",
+                         "actdays_per_user", "obs_pu_pd",
+                         "idpa", "id_rate"),
+             covid_df = covid_monthly)
+
+### Seq and seq-change ~ COVID ----
 # 2019-2020年各项指标环比月度变化作图
 tot_mthdata_seqchg_1920 <- fun_seqchg_1920(tot_mthdata)
 ggplot(melt(tot_mthdata_seqchg_1920, id = c("city", "year", "month"))) +
@@ -464,10 +474,10 @@ fun_corcovid(x = tot_mthdata_seqchg_chg_1920,
                          "idpa", "id_rate"),
              covid_df = covid_monthly)
 
-# User group analysis ----
+## User group analysis ----
 # 对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
 
-## Data construction ----
+### Data construction ----
 # 函数：输出各用户各年份观测数、活跃天数及日均观测数
 fun_smrydata <- function(x) {
   # 从日期中提取年月数据
@@ -514,7 +524,7 @@ user_yrdata$rec_yr_grp[which(user_yrdata$rec_yr >= 3)] <- 3
 user_yrdata$rec_yr_grp_less <- user_yrdata$rec_yr_grp
 user_yrdata$rec_yr_grp_less[which(user_yrdata$rec_yr_grp >= 2)] <- 2
 
-## Fac: metrics + city; metric ~ user grps ----
+### Fac: metrics + city; metric ~ user grps ----
 # 目标：证明历年老用户均比新用户更活跃
 # 统计检验分指标各城市跨用户组差异
 user_yrdata_ls <- vector("list", 3)
@@ -527,47 +537,7 @@ for (i in 1:3) {
     c("city", "user", "year", "rec_yr_grp_less", "tarvar")
 }
 
-fun_meanse_calc <- function(x, name_var = "year") {
-  # 先分别计算样本量、均值、SD再合并起来
-  funin_aggregate <- function(x, name_calc, name_newvar) {
-    xin_output <- aggregate(tarvar ~ city + rec_yr_grp_less,
-                            data = x, FUN = name_calc)
-    names(xin_output)[3] <- name_newvar
-    xin_output
-  }
-  x_n <- funin_aggregate(x, "length", "n")
-  x_mean <- funin_aggregate(x, "mean", "mean")
-  x_sd <- funin_aggregate(x, "sd", "sd")
-  x_output <- Reduce(merge, list(x_n, x_mean, x_sd))
 
-  # 计算SE
-  x_output$se <- x_output$sd / sqrt(x_output$n)
-
-  # 统计检测两个年份差异是否显著
-  x_aov <- vector("logical")
-  for (i in unique(x$city)) {
-    x_city <- subset(x, city == i)
-    x_aov <-
-      c(x_aov,
-        summary(
-          aov(formula = x_city$tarvar ~
-                x_city[, name_var]))[[1]]$`Pr(>F)`[1] < 0.05)
-  }
-  x_aov <- data.frame(city = unique(x$city), aov = x_aov)
-
-  # 合并统计结果到输出数据框
-  x_output <- merge(x_output, x_aov, all.x = TRUE)
-  x_output$aov_mark <- NA
-  x_output$aov_mark[x_output$aov] <- "*"
-
-  # 只留下每个城市两个年份中均值+SE之和较大一行对应的统计检验结果以便作图
-  x_output$sum_mean_se <- x_output$mean + x_output$se
-  x_output <- x_output[order(x_output$city, x_output$sum_mean_se), ]
-  delete_aov_mark <- c(1:nrow(x_output))[as.logical(1:nrow(x_output) %% 2)]
-  x_output$aov_mark[delete_aov_mark] <- NA
-
-  return(x_output)
-}
 fun_meanse_calc(x = user_yrdata_ls[[1]], name_var = "rec_yr_grp_less")
 user_yrdata_ls_smry <-
   lapply(user_yrdata_ls, fun_meanse_calc, name_var = "rec_yr_grp_less")
@@ -592,13 +562,13 @@ for (i in 1:3) {
     labs(title = paste(testvar[i]))
 }
 
-png(filename = "分指标各城市跨用户组对比.png", res = 300,
+png(filename = "ProcData/分指标各城市跨用户组对比.png", res = 300,
     width = 2000, height = 3500)
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 
-## Fac: metrics + user grp; metric ~ year 19-20 ----
+### Fac: metrics + user grp; metric ~ year 19-20 ----
 # 目标：检验新冠对新用户还是老用户影响更大
 # 通过均值误差图可视化分用户组分指标各城市跨2019-2020年对比
 # 函数：对用户年度数据按用户组分成几个数据框
@@ -696,7 +666,7 @@ for (i in 1:6) {
     labs(title = paste("Group", testvar$rec_yr_grp_less[i], testvar$tarvar[i]))
 }
 
-png(filename = "分用户组同指标不同年份对比.png", res = 300,
+png(filename = "ProcData/分用户组同指标不同年份对比.png", res = 300,
     width = 2000, height = 3500)
 Reduce("/", plot_ls) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
