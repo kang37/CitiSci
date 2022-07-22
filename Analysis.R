@@ -462,37 +462,6 @@ SerPlot(
 dev.off()
 # 结论：各年份中，数据各月份变化并无固定规律。原本还比较了2020年各月份同2019年对应月份之间的差异，但是既然多年来各月份的“基线数据”就没有明显固定的规律，那么这样的同期比较也就没有意义了。因此就把这部分分析删除了。
 
-### Metrics ~ COVID data ----
-# 2019-2020每月同比变化
-# 每月各项变化
-# bug：这部分无法运行，但是似乎也没有必要
-record.city.mth_chg_1920 <- MthChg1920(record.city.mth)
-SerPlotMthChg1920(record.city.mth_chg_1920)
-CorCovid(x = record.city.mth_chg_1920,
-             testvar = c("obs", "users", "act_days", "obs_per_user",
-                         "actdays_per_user", "obs_pu_pd",
-                         "idpa", "id_rate"),
-             covid_df = covid.mth)
-
-### Seq and seq-change ~ COVID ----
-# 2019-2020年各项指标环比月度变化作图
-# bug：环比的意义又在哪里呢？需要进一步理清楚
-SeqChg1920(record.city.mth) %>%
-  melt(data = ., id = c("city", "year", "month")) %>%
-  ggplot() +
-  geom_line(aes(month, value, color = factor(year))) +
-  facet_grid(variable ~ city, scales = "free")
-
-# 2020年相比前一年环比的变化率和新冠的关系
-# bug：这部分无法运行，同时也要反思下这部分分析是否有必要
-record.city.mth_seqchg_chg_1920 <- MthChg1920(record.city.mth_seqchg_1920)
-SerPlotMthChg1920(record.city.mth_seqchg_chg_1920)
-CorCovid(x = record.city.mth_seqchg_chg_1920,
-             testvar = c("obs", "users", "act_days", "obs_per_user",
-                         "actdays_per_user", "obs_pu_pd",
-                         "idpa", "id_rate"),
-             covid_df = covid.mth)
-
 ## User group analysis ----
 # 对参与者进行分组分析，看活跃用户和其他用户在疫情期间的表现有何差异
 
