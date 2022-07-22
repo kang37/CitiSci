@@ -414,8 +414,7 @@ png(filename = "ProcData/历年各项指标变化.png", res = 300,
     plot_layout(guides = "collect") & theme(legend.position = "bottom"))
 dev.off()
 
-# 报告分析：
-# 各年份各指标相比前一年的变化
+# 作图：各年份各指标相比前一年的变化
 png(filename = "ProcData/各指标年份两两间比较.png", res = 300,
     width = 2000, height = 4500)
 (
@@ -429,7 +428,7 @@ dev.off()
 # 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
 
 # 室内参与和室外参与的关系
-# 检测观测条数和鉴定条数的关系
+# 作图：检测观测条数和鉴定条数的关系
 plot(log(record.city.yr$obs), log(record.city.yr$idpa))
 # 分城市来看
 ggplot(record.city.yr) +
