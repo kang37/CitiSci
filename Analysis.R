@@ -460,32 +460,7 @@ SerPlot(
   Reduce("/", x = .) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
-# 结论：各年份中，数据各月份变化并无固定规律。
-
-# 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
-# bug：2021年的数据呢？
-# bug：既然本来多年月度数据就没有表现出明显规律，那是不是也不需要做这个分析？
-png(filename = "ProcData/19-20年各月各项指标变化.png", res = 300,
-    width = 3000, height = 4500)
-subset(record.city.mth, year %in% c(2019, 2020)) %>%
-  SerPlot(
-    x = .,
-    var_ls =
-      c("obs", "users", "act_days",
-        "obs_per_user",
-        "actdays_per_user",
-        "obs_pu_pd",
-        "idpa", "id_rate"),
-    plotname =
-      c("(a) Observation", "(b) Participant", "(c) Active days",
-        "(d) Observations per participant",
-        "(e) Active days per participant",
-        "(f) Observations per participant per active days",
-        "(g) Identification participant", "(h) Identification rate")
-  ) %>%
-  Reduce("/", x = .) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-dev.off()
+# 结论：各年份中，数据各月份变化并无固定规律。原本还比较了2020年各月份同2019年对应月份之间的差异，但是既然多年来各月份的“基线数据”就没有明显固定的规律，那么这样的同期比较也就没有意义了。因此就把这部分分析删除了。
 
 ### Metrics ~ COVID data ----
 # 2019-2020每月同比变化
