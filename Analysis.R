@@ -120,7 +120,8 @@ SerPlot <- function(x, var_ls, plotname, dur = "month") {
       plot_ls[[i]] <- ggplot(x) +
         geom_line(aes_string("month", var_ls[i], color = "year")) +
         scale_x_continuous(breaks = c(3, 6, 9, 12)) +
-        scale_color_manual(values = c("2019" = "#00AF64", "2020" = "#bf5930")) +
+        scale_color_manual(
+          values = c("2019" = "#00AF64", "2020" = "#bf5930", "2021" = "blue")) +
         labs(title = plotname[i], y = NULL, x = "") +
         facet_wrap(.~ city, nrow = 1, scales = "free")
     }
@@ -437,7 +438,8 @@ ggplot(record.city.yr) +
 # 结论：两者几乎就是线性相关的，可以推测鉴定条数增加主要由观测条数驱动，一定程度上，和“室外活动减少，室内活动增加”的结论形成对比。当然不排除一种可能性，即说不定室内活动减少得幅度较低，而室外活动受到影响更大，减少得较多。这种可能性也可以检测，但因为这些变化受多种因素影响，就算检测了，结果也未必可靠，因此暂时不检测。
 
 ## Monthly comparison ----
-### General comparison of 2016-2020 and 2019-2020 ----
+### General comparison of 2016-2021 ----
+# 作图：历年各月份是否展现出什么类似的趋势
 png(filename = "ProcData/历年各月各项指标变化.png", res = 300,
     width = 3000, height = 4500)
 SerPlot(
@@ -458,7 +460,7 @@ SerPlot(
   Reduce("/", x = .) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
-# bug：除了2019年和2020年，其他年份的线都是灰色，至少应该把2021年的线也通过其他颜色展示出来
+# 结论：各年份中，数据各月份变化并无固定规律。
 
 # 添加各城市2019-2020各月记录数、活跃用户数、活跃天数和人均指标变化并可视化
 # bug：2021年的数据呢？
