@@ -15,7 +15,7 @@ sPfig <- TRUE
 # Function ----
 # 函数：按年或月汇总计算记录数、活跃用户数、活跃天数等数据
 # 参数：
-# x：含日期、user_id等信息的每条观测数据
+# x：含日期、user_id等信息的每条观测原始数据
 # dur：按照什么粒度进行汇总，“month”或“year”
 SmryData <- function(x, dur = "month") {
   # 在原数据基础上加上鉴定者数列
@@ -428,15 +428,14 @@ png(filename = "ProcData/各指标年份两两间比较.png", res = 300,
 dev.off()
 # 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
 
-# 室内参与和室外参与的关系？
-# 检测观测数据参与者和鉴定者数量的关系
-# bug：用ggplot作图进一步分析
-cor.test(record.city.yr$users, record.city.yr$idpa)
-# 虽然按城市分组的话，每个城市只有5个样本，但是也可以看看情况如何
-# bug：可以去掉这部分，样本量太小了，没有意义
-lapply(split(record.city.yr, record.city.yr$city),
-       function(x) {cor.test(x[["users"]], x[["idpa"]])})
-# bug：检测结果发现，一些既往研究认为公民科学由室外转向室内，但是该分析表明两者同增共减，可以作为检验“新冠期间公民科学由室外转向室内”假说的参考，但是这里有点逻辑问题：无法准确说明2019-2020的情况。
+# 室内参与和室外参与的关系
+# 检测观测条数和鉴定条数的关系
+plot(log(record.city.yr$obs), log(record.city.yr$idpa))
+# 分城市来看
+ggplot(record.city.yr) +
+  geom_point(aes(obs, idpa, color = factor(year))) +
+  facet_wrap(.~ city, scales = "free")
+# 结论：两者几乎就是线性相关的，可以推测鉴定条数增加主要由观测条数驱动，一定程度上，和“室外活动减少，室内活动增加”的结论形成对比。当然不排除一种可能性，即说不定室内活动减少得幅度较低，而室外活动受到影响更大，减少得较多。这种可能性也可以检测，但因为这些变化受多种因素影响，就算检测了，结果也未必可靠，因此暂时不检测。
 
 ## Monthly comparison ----
 ### General comparison of 2016-2020 and 2019-2020 ----
