@@ -136,31 +136,32 @@ SerPlot <- function(x, var_ls, plotname, dur = "month") {
   return(plot_ls)
 }
 
-# 函数：对比各城市2019和2020年的数据
-# 输入：各城市各年份各项指标数值数据框
-# 输出：对于各指标2020低于2019的城市个数并可视化
-Comp1920 <- function(x) {
-  # 将数据分成2019和2020两部分并且按照城市排序
-  x1 <- subset(x, year == 2019)
-  x1 <- x1[order(x1$city), ]
-  x2 <- subset(x, year == 2020)
-  x2 <- x2[order(x2$city), ]
+# 函数：对比各城市2019和2020年的数据并可视化
+# 参数：
+# x：各城市各年份各项指标数值数据框
+# yr.base：基准年
+# yr.tar：对比年份
+CompTwoYr <- function(x, yr.base, yr.tar) {
+  # 将数据分成基准年和比较年两部分并且按照城市排序
+  x1 <- subset(x, year == yr.base) %>%
+    mutate(city = factor(city, levels = kCity)) %>%
+    arrange(city)
+  x2 <- subset(x, year == yr.tar) %>%
+    mutate(city = factor(city, levels = kCity)) %>%
+    arrange(city)
 
   # 计算各项数值的差异
-  # 如果2020年比2019年高则判断为TRUE
-  x <- cbind(city = x1$city,
-             ifelse(x2[names(x2)[!names(x2) %in% c("city", "year")]] /
-                      x1[names(x1)[!names(x1) %in% c("city", "year")]] > 1,
-                    "20 > 19", "20 <= 19"))
-  x <- as.data.frame(x)
-
-  # 输出各项指标2020低于2019的城市数
-  print(apply(x[names(x)[!names(x) %in% c("city", "year")]], 2,
-              function(y) {sum(y == FALSE)}))
-
-  # 转化成长数据并作图
-  x <- melt(x, id = "city")
-  ggplot(x) +
+  # 如果比较年比基准年高则判断为TRUE
+  cbind(city = as.character(x1$city),
+        ifelse(x2[names(x2)[!names(x2) %in% c("city", "year", "yr_sht")]] /
+                 x1[names(x1)[!names(x1) %in% c("city", "year", "yr_sht")]] > 1,
+               paste0(yr.tar, " > ", yr.base),
+               paste0(yr.tar, " <= ", yr.base))) %>%
+    as.data.frame() %>%
+    # 转化成长数据并作图
+    melt(data = ., id = "city") %>%
+    mutate(city = factor(city, levels = kCity)) %>%
+    ggplot() +
     geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5) +
     theme(axis.text.x = element_text(angle = 90))
 }
@@ -413,10 +414,19 @@ png(filename = "ProcData/历年各项指标变化.png", res = 300,
     plot_layout(guides = "collect") & theme(legend.position = "bottom"))
 dev.off()
 
-# 报告分析
-# 2020年出现下降的城市
-Comp1920(record.city.yr)
-# bug：补上2020年和2021年的对比：人们是否习惯了新冠而重新开始活动？
+# 报告分析：
+# 各年份各指标相比前一年的变化
+png(filename = "ProcData/各指标年份两两间比较.png", res = 300,
+    width = 2000, height = 4500)
+(
+  CompTwoYr(record.city.yr, yr.base = 2016, yr.tar = 2017) /
+    CompTwoYr(record.city.yr, yr.base = 2017, yr.tar = 2018) /
+    CompTwoYr(record.city.yr, yr.base = 2018, yr.tar = 2019) /
+    CompTwoYr(record.city.yr, yr.base = 2019, yr.tar = 2020) /
+    CompTwoYr(record.city.yr, yr.base = 2020, yr.tar = 2021)
+)
+dev.off()
+# 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
 
 # 室内参与和室外参与的关系？
 # 检测观测数据参与者和鉴定者数量的关系
