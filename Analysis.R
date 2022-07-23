@@ -325,6 +325,82 @@ GetObs <- function(name.dir) {
   return(record)
 }
 
+# 函数：输出各用户各年份观测条数、观测天数及每观测天观测条数，该数据主要用于用户分析
+# 参数：
+# x：带有城市、用户、观测条数等的原始数据
+SmryUserData <- function(x) {
+  x$year <- factor(x$year)
+  x$day <- factor(x$day)
+
+  x_output <- x %>%
+    group_by(year, user_id) %>%
+    summarise(obs = n(),
+              act_days = n_distinct(day),
+              obs_pd = obs/act_days) %>%
+    ungroup() %>%
+    rename(user = user_id)
+
+  return(x_output)
+}
+
+# 函数：分组计算输入数据的样本量、均值、SD、SE和统计检验结果等，用于用户分析
+# 参数：
+# x：各城市各用户带分组信息的数据
+# name.var：要分析的指标
+# 输出：各城市统计整理后的数据框
+MeanSeAov <- function(x, name.var = "obs") {
+  # 对各城市分组计算样本量、均值、SD
+  x_output <- x %>%
+    group_by(city, obsr_grp) %>%
+    summarise(
+      n = n(),
+      mean = mean(get(name.var)),
+      sd = sd(get(name.var)),
+      se = sd/n
+    ) %>%
+    ungroup()
+
+  # 对各个城市统计对比不同分组之间的差异
+  x_aov <- vector("logical")
+  for (i in unique(x$city)) {
+    x_city <- subset(x, city == i)
+    x_aov <-
+      c(x_aov,
+        summary(
+          aov(formula = x_city[[name.var]] ~
+                x_city[["obsr_grp"]]))[[1]]$`Pr(>F)`[1] < 0.05)
+  }
+  x_aov <- data.frame(city = unique(x$city), aov = x_aov)
+
+  # 合并统计结果到输出数据框
+  x_output <- merge(x_output, x_aov, all.x = TRUE)
+  x_output$aov_mark <- NA
+  x_output$aov_mark[x_output$aov] <- "*"
+
+  # 只留下每个城市两个年份中均值+SE之和较大一行对应的统计检验结果以便作图
+  x_output$sum_mean_se <- x_output$mean + x_output$se
+  x_output <- x_output[order(x_output$city, x_output$sum_mean_se), ]
+  delete_aov_mark <- c(1:nrow(x_output))[as.logical(1:nrow(x_output) %% 2)]
+  x_output$aov_mark[delete_aov_mark] <- NA
+
+  return(x_output)
+}
+
+# 函数：做带误差棒点图，并显示组间对比结果，目前用于用户分析
+# 参数：
+# x：包含各城市分组平均值、误差值等的数据
+PlotPointBar <- function(x, name.title = NULL) {
+  ggplot(x, aes(city, mean, color = factor(obsr_grp))) +
+    geom_point(position = position_dodge(.2)) +
+    geom_errorbar(aes(ymin = mean - se, ymax = mean + se, width = 0.2),
+                  position = position_dodge(.2)) +
+    geom_text(aes(x = city, y = (mean + se)*1.05, label = aov_mark),
+              color = "black", size = 5) +
+    labs(y = name.title) +
+    theme(axis.title.x = element_blank(),
+          axis.text.x = element_text(angle = 90))
+}
+
 # Read data ----
 ## Constant ----
 # 城市：按照人口从多到少排序
@@ -332,7 +408,6 @@ kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
            "Kobe", "Kawasaki", "Kyoto", "Saitama", "Hiroshima")
 
 ## Prefectures and cities ----
-### Raw data ----
 pref.city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
   tibble() %>%
   # 保留本研究的目标城市
@@ -340,6 +415,11 @@ pref.city <- read.xlsx("RawData/Prefectures_cities.xlsx") %>%
   rename(prefecture = prefecture_en, city = city_en) %>%
   # 按照城市人口从多到少排序
   mutate(city = factor(city, levels = kCity))
+
+## iNaturalist data ----
+### Raw data ----
+# 读取公民科学各条记录文件并合成一个列表，列表的各元素分别为各个城市的数据
+record.raw <- GetObs(name.dir = "RawData/iNatData")
 
 ### Yearly data ----
 # 各城市各年份观测数等数据
@@ -355,9 +435,32 @@ record.city.mth <- lapply(record.raw, SmryData, dur = "month") %>%
   CityLs2Df() %>%
   tibble()
 
-## Raw iNaturalist data ----
-# 读取公民科学各条记录文件并合成一个列表，列表的各元素分别为各个城市的数据
-record.raw <- GetObs(name.dir = "RawData/iNatData")
+### User data ----
+# 构建用户数据：各个城市各个用户各年份各指标的数值
+record.city.obsr.yr <- CityLs2Df(lapply(record.raw, SmryUserData))
+# 检测是否有用户跨城市上传数据
+dim(unique(record.city.obsr.yr[c("city", "user", "year")]))
+dim(unique(record.city.obsr.yr[c("user", "year")]))
+# 结论：有1000多名用户跨城市上传数据
+
+# 用户分组：有两种方式，一种是根据用户是第几年参与公民科学来分类，可以分成“第一年参加组”、“第二年参加组”等等，另一种根据2016到2021年间共参与了几年来将观测者区分为新用户和老用户，这种分类方法当然带有点“注定”的意味，也就是说一个老用户，就算他是第一年参加活动，他也是被算成一个“老用户”。此外，因为有些用户跨城市上传观测数据，所以用户分组的时候应该无视城市，比如有个用户第一年年在一个城市上传了数据，次年在另一个城市上传了数据，那么如果按照上述第一种方式来分类，他的“次年”就应该被算作“第二年”，而非“第一年”。下面暂时采用第二种分组方式对用户进行分组。
+
+# 构造用户数据，计算用户2016到2021年间有上传观测数据的年数
+user.grp <- record.city.obsr.yr %>%
+  select(user, year) %>%
+  unique() %>%
+  # 计算用户总共上传了几年数据
+  group_by(user) %>%
+  summarise(n_yr = n()) %>%
+  ungroup()
+table(user.grp$n_yr)
+# 结论：绝大部分用户都是只活跃一年的新用户
+
+# 将用户分组数据加入年度观测数据中
+record.city.obsr.yr <- record.city.obsr.yr %>%
+  left_join(user.grp, by = "user") %>%
+  # 观测总年数大于等于2年都划为老用户
+  mutate(obsr_grp = case_when(n_yr <= 1 ~ "short", TRUE ~ "long"))
 
 ## COVID-19 data ----
 # bug：之后删除结论
@@ -460,3 +563,28 @@ SerPlot(
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 # 结论：各年份中，数据各月份变化并无固定规律。原本还比较了2020年各月份同2019年对应月份之间的差异，但是既然多年来各月份的“基线数据”就没有明显固定的规律，那么这样的同期比较也就没有意义了。因此就把这部分分析删除了。出于相同的原因，也删除了新冠数据和各年月度数据之间的关系分析代码，因为2020年或者2021年各月份的指标数据变化可能是随机因素导致的，而非新观点导致的。
+
+## User group analysis ----
+# 对比新老用户，看老用户在各项指标上是否都高于新用户
+png(filename = "ProcData/分指标各城市跨用户组对比点误差棒图.png", res = 300,
+    width = 2000, height = 3500)
+MeanSeAov(record.city.obsr.yr, name.var = "obs") %>%
+  PlotPointBar(name.title = "(a)") /
+  MeanSeAov(record.city.obsr.yr, name.var = "act_days") %>%
+  PlotPointBar(name.title = "(b)") /
+  MeanSeAov(record.city.obsr.yr, name.var = "obs_pd") %>%
+  PlotPointBar(name.title = "(c)") +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
+# 盒形图也可以作为参考
+png(filename = "ProcData/分指标各城市跨用户组对比盒形图.png", res = 300,
+    width = 2000, height = 3500)
+(ggplot(record.city.obsr.yr) +
+  geom_boxplot(aes(city, obs, color = obsr_grp))) /
+  (ggplot(record.city.obsr.yr) +
+  geom_boxplot(aes(city, act_days, color = obsr_grp))) /
+  (ggplot(record.city.obsr.yr) +
+  geom_boxplot(aes(city, obs_pd, color = obsr_grp))) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
+# 结论：老用户观测数通常显著高于新用户，其原因主要是老用户观测天数较多。如果看观测强度，即每观测天观测条数的话，尽管大多数不显著，但是新用户往往甚至高于老用户。可见持之以恒，少量多次才是老用户成功超越新用户的关键。
