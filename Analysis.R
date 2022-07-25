@@ -376,7 +376,7 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
   x_output$aov_mark[x_output$aov] <- " * "
 
   # 根据城市排序
-  x_output <- x_output %>% mutate(city = factor(city, levels = kcity))
+  x_output <- x_output %>% mutate(city = factor(city, levels = kCity))
 
   return(x_output)
 }
@@ -394,6 +394,20 @@ PlotBarError <- function(x, name.grp = "obsr_grp",
     labs(y = name.yaxis, title = name.title) +
     theme(axis.title.x = element_blank(),
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+}
+
+# 函数：做带误差棒的条形图，对比新老用户的表现差异
+# 参数：
+# x：带年份、组别、指标的各城市用户数据
+# name.yr：目标年份
+# user.grp：目标用户组别
+# name.var：目标指标
+# name.yaxis：Y轴标题
+# name.title：图片标题
+PlotCompObsr <- function(x, name.var, name.title, ...) {
+  MeanSeAov(x, name.var = name.var) %>%
+    PlotBarError(name.title = name.title, ...) +
+    scale_fill_manual(name = "Observer group", values = c("#FFA500", "#1047A9"))
 }
 
 # 函数：从用户数据中筛除目标年份和用户组别，做带误差棒的条形图，对比新冠期间和此前的差别
@@ -584,14 +598,14 @@ dev.off()
 ## User group analysis ----
 ### Metrics ~ user grps ----
 # 对比新老用户，看老用户在各项指标上是否都高于新用户
-png(filename = "ProcData/分指标各城市跨用户组对比点误差棒图.png", res = 300,
+png(filename = "ProcData/分指标各城市跨用户组对比条形图.png", res = 300,
     width = 2000, height = 3500)
-MeanSeAov(record.city.obsr.yr, name.var = "obs") %>%
-  PlotBarError(name.title = "(a)") /
-  MeanSeAov(record.city.obsr.yr, name.var = "act_days") %>%
-  PlotBarError(name.title = "(b)") /
-  MeanSeAov(record.city.obsr.yr, name.var = "obs_pd") %>%
-  PlotBarError(name.title = "(c)") +
+PlotCompObsr(record.city.obsr.yr, name.var = "obs",
+             name.yaxis = "Observation", name.title = "(a)") /
+  PlotCompObsr(record.city.obsr.yr, name.var = "act_days",
+               name.yaxis = "Obs. days", name.title = "(b)") /
+  PlotCompObsr(record.city.obsr.yr, name.var = "obs_pd",
+               name.yaxis = "Obs. per day", name.title = "(c)") +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 # 盒形图也可以作为参考
