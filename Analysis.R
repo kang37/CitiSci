@@ -9,9 +9,6 @@ library(patchwork)
 library(reshape2)
 library(lubridate)
 
-# Setting ----
-sPfig <- TRUE
-
 # Function ----
 # 函数：按年或月汇总计算记录数、活跃用户数、活跃天数等数据
 # 参数：
