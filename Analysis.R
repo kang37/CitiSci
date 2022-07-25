@@ -348,10 +348,10 @@ SmryUserData <- function(x) {
 # x：各城市各用户带分组信息的数据
 # name.var：要分析的指标
 # 输出：各城市统计整理后的数据框
-MeanSeAov <- function(x, name.var = "obs") {
+MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
   # 对各城市分组计算样本量、均值、SD
   x_output <- x %>%
-    group_by(city, obsr_grp) %>%
+    group_by(city, get(name.grp)) %>%
     summarise(
       n = n(),
       mean = mean(get(name.var)),
@@ -359,6 +359,7 @@ MeanSeAov <- function(x, name.var = "obs") {
       se = sd/n
     ) %>%
     ungroup()
+  names(x_output)[which(names(x_output) == "get(name.grp)")] <- name.grp
 
   # 对各个城市统计对比不同分组之间的差异
   x_aov <- vector("logical")
@@ -368,20 +369,16 @@ MeanSeAov <- function(x, name.var = "obs") {
       c(x_aov,
         summary(
           aov(formula = x_city[[name.var]] ~
-                x_city[["obsr_grp"]]))[[1]]$`Pr(>F)`[1] < 0.05)
+                x_city[[name.grp]]))[[1]]$"Pr(>F)"[1] < 0.05)
   }
   x_aov <- data.frame(city = unique(x$city), aov = x_aov)
 
   # 合并统计结果到输出数据框
   x_output <- merge(x_output, x_aov, all.x = TRUE)
-  x_output$aov_mark <- NA
-  x_output$aov_mark[x_output$aov] <- "*"
-
-  # 只留下每个城市两个年份中均值+SE之和较大一行对应的统计检验结果以便作图
-  x_output$sum_mean_se <- x_output$mean + x_output$se
-  x_output <- x_output[order(x_output$city, x_output$sum_mean_se), ]
-  delete_aov_mark <- c(1:nrow(x_output))[as.logical(1:nrow(x_output) %% 2)]
-  x_output$aov_mark[delete_aov_mark] <- NA
+  x_output$aov_mark <- "   "
+  x_output$aov_mark[x_output$aov] <- " * "
+  # 将显著性标记加入城市名称
+  x_output$city <- paste0(x_output$city, x_output$aov_mark)
 
   return(x_output)
 }
@@ -389,16 +386,35 @@ MeanSeAov <- function(x, name.var = "obs") {
 # 函数：做带误差棒点图，并显示组间对比结果，目前用于用户分析
 # 参数：
 # x：包含各城市分组平均值、误差值等的数据
-PlotPointBar <- function(x, name.title = NULL) {
-  ggplot(x, aes(city, mean, color = factor(obsr_grp))) +
-    geom_point(position = position_dodge(.2)) +
+PlotBarError <- function(x, name.grp = "obsr_grp",
+                         name.yaxis = NULL, name.title = NULL) {
+  ggplot(x, aes(city, mean, fill = factor(get(name.grp)))) +
+    geom_bar(stat = "identity", position = position_dodge()) +
     geom_errorbar(aes(ymin = mean - se, ymax = mean + se, width = 0.2),
-                  position = position_dodge(.2)) +
-    geom_text(aes(x = city, y = (mean + se)*1.05, label = aov_mark),
-              color = "black", size = 5) +
-    labs(y = name.title) +
+                  position = position_dodge(0.9)) +
+    labs(y = name.yaxis, title = name.title) +
     theme(axis.title.x = element_blank(),
-          axis.text.x = element_text(angle = 90))
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+}
+
+
+# 函数：从用户数据中筛除目标年份和用户组别，做带误差棒的条形图，对比新冠期间和此前的差别
+# 参数：
+# x：带年份、组别、指标的各城市用户数据
+# name.yr：目标年份
+# user.grp：目标用户组别
+# name.var：目标指标
+# name.yaxis：Y轴标题
+# name.title：图片标题
+PlotCovidYr <- function(x, name.yr = c("2019", "2020", "2021"),
+                        user.grp, name.var, name.yaxis, name.title) {
+  # 保留目标年老用户数据
+  subset(x, year %in% name.yr & obsr_grp == user.grp) %>%
+    MeanSeAov(., name.grp = "year", name.var = name.var) %>%
+    PlotBarError(name.grp = "year",
+                 name.yaxis = name.yaxis, name.title = name.title) +
+    scale_fill_manual(name = "Year",
+                      values = c("#009999", "#FFCE00", "#FF0000"))
 }
 
 # Read data ----
@@ -570,11 +586,11 @@ dev.off()
 png(filename = "ProcData/分指标各城市跨用户组对比点误差棒图.png", res = 300,
     width = 2000, height = 3500)
 MeanSeAov(record.city.obsr.yr, name.var = "obs") %>%
-  PlotPointBar(name.title = "(a)") /
+  PlotBarError(name.title = "(a)") /
   MeanSeAov(record.city.obsr.yr, name.var = "act_days") %>%
-  PlotPointBar(name.title = "(b)") /
+  PlotBarError(name.title = "(b)") /
   MeanSeAov(record.city.obsr.yr, name.var = "obs_pd") %>%
-  PlotPointBar(name.title = "(c)") +
+  PlotBarError(name.title = "(c)") +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 # 盒形图也可以作为参考
@@ -589,3 +605,19 @@ png(filename = "ProcData/分指标各城市跨用户组对比盒形图.png", res
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 # 结论：老用户观测数通常显著高于新用户，其原因主要是老用户观测天数较多。如果看观测强度，即每观测天观测条数的话，尽管大多数不显著，但是新用户往往甚至高于老用户。可见持之以恒，少量多次才是老用户成功超越新用户的关键。并且注意，这里的“观测天数较多”是指年内观测天数多，而不是因为老用户活动年数多导致的研究时长内总的观测天数多。
+
+### Metrics ~ years ----
+# 分用户组各指标不同年份对比
+((PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs",
+              name.yaxis = "Observation", name.title = "(a)") /
+    PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
+                name.yaxis = "Observation", name.title = "(b)")) |
+   (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "act_days",
+                name.yaxis = "Obs. day", name.title = "(c)") /
+      PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "act_days",
+                  name.yaxis = "Obs. day", name.title = "(d)")) |
+   (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs_pd",
+                name.yaxis = "Obs. per day", name.title = "(e)") /
+      PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
+                  name.yaxis = "Obs. per day", name.title = "(f)"))) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
