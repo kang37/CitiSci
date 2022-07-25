@@ -525,8 +525,8 @@ covid.mth <-
 # Analysis ----
 ## Annual comparison ----
 # 作图：各城市各指标历年变化
-png(filename = "ProcData/历年各项指标变化.png", res = 300,
-    width = 3000, height = 4000)
+png(filename = "ProcData/分指标和城市各年份指标值变化.png", res = 300,
+    width = 3500, height = 4000)
 (SerPlot(record.city.yr,
          var_ls =
            c(
@@ -538,11 +538,12 @@ png(filename = "ProcData/历年各项指标变化.png", res = 300,
            ),
          plotname =
            c(
-             "(a) Observation", "(b) Participant", "(c) Active day",
-             "(d) Observations per participant",
-             "(e) Active days per participant",
-             "(f) Observations per participant per active day",
-             "(g) Identification participant", "(h) Identification rate"
+             "(a) Observation", "(b) Observer",
+             "(c) Obs. day",
+             "(d) Obs. per observer",
+             "(e) Obs. day per observer",
+             "(f) Obs. per observer per obs. day",
+             "(g) Identification", "(h) Identification rate"
            ),
          dur = "year") %>%
     Reduce("/", x = .) +
@@ -573,7 +574,7 @@ ggplot(record.city.yr) +
 
 ## Monthly comparison ----
 # 作图：历年各月份是否展现出什么类似的趋势
-png(filename = "ProcData/历年各月各项指标变化.png", res = 300,
+png(filename = "ProcData/分指标和城市不同年份各月份指标值变化.png", res = 300,
     width = 3000, height = 4500)
 SerPlot(
   record.city.mth,
@@ -584,16 +585,19 @@ SerPlot(
       "obs_pu_pd",
       "idpa", "id_rate"),
   plotname =
-    c("(a) Observation", "(b) Participant", "(c) Active day",
-      "(d) Observations per participant",
-      "(e) Active days per participant",
-      "(f) Observations per participant per active day",
-      "(g) Identification participant", "(h) Identification rate")
+    c(
+      "(a) Observation", "(b) Observer",
+      "(c) Obs. day",
+      "(d) Obs. per observer",
+      "(e) Obs. day per observer",
+      "(f) Obs. per observer per obs. day",
+      "(g) Identification", "(h) Identification rate"
+    )
 ) %>%
   Reduce("/", x = .) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
-# 结论：各年份中，数据各月份变化并无固定规律。原本还比较了2020年各月份同2019年对应月份之间的差异，但是既然多年来各月份的“基线数据”就没有明显固定的规律，那么这样的同期比较也就没有意义了。因此就把这部分分析删除了。出于相同的原因，也删除了新冠数据和各年月度数据之间的关系分析代码，因为2020年或者2021年各月份的指标数据变化可能是随机因素导致的，而非新观点导致的。
+# 结论：各年份中，数据各月份变化并无固定规律。原本还比较了2020年各月份同2019年对应月份之间的差异，但是既然多年来各月份的“基线数据”就没有明显固定的规律，那么这样的同期比较也就没有意义了。因此就把这部分分析删除了。出于相同的原因，也删除了新冠数据和各年月度数据之间的关系分析代码，因为2020年或者2021年各月份的指标数据变化可能是随机因素导致的，而非新冠导致的。
 
 ## User group analysis ----
 ### Metrics ~ user grps ----
@@ -624,17 +628,17 @@ dev.off()
 ### Metrics ~ years ----
 # 分用户组各指标不同年份对比
 png(filename = "ProcData/分用户组和指标各城市跨年份对比条形图.png", res = 300,
-    width = 3500, height =2000)
+    width = 1800, height =1500)
 ((PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs",
               name.yaxis = "Observation", name.title = "(a)") /
     PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
-                name.yaxis = "Observation", name.title = "(b)")) |
+                name.yaxis = "Observation", name.title = "(c)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "act_days",
-                name.yaxis = "Obs. day", name.title = "(c)") /
+                name.yaxis = "Obs. day", name.title = "(e)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "act_days",
-                  name.yaxis = "Obs. day", name.title = "(d)")) |
+                  name.yaxis = "Obs. day", name.title = "(b)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs_pd",
-                name.yaxis = "Obs. per day", name.title = "(e)") /
+                name.yaxis = "Obs. per day", name.title = "(d)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
                   name.yaxis = "Obs. per day", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
