@@ -374,8 +374,9 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
   x_output <- merge(x_output, x_aov, all.x = TRUE)
   x_output$aov_mark <- "   "
   x_output$aov_mark[x_output$aov] <- " * "
-  # 将显著性标记加入城市名称
-  x_output$city <- paste0(x_output$city, x_output$aov_mark)
+
+  # 根据城市排序
+  x_output <- x_output %>% mutate(city = factor(city, levels = kcity))
 
   return(x_output)
 }
@@ -383,9 +384,10 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
 # 函数：做带误差棒点图，并显示组间对比结果，目前用于用户分析
 # 参数：
 # x：包含各城市分组平均值、误差值等的数据
+# 漏洞：如何解决图中横轴标签按照城市排序的问题？
 PlotBarError <- function(x, name.grp = "obsr_grp",
                          name.yaxis = NULL, name.title = NULL) {
-  ggplot(x, aes(city, mean, fill = factor(get(name.grp)))) +
+  ggplot(data = x, aes(paste0(city, aov_mark), mean, fill = factor(get(name.grp)))) +
     geom_bar(stat = "identity", position = position_dodge()) +
     geom_errorbar(aes(ymin = mean - se, ymax = mean + se, width = 0.2),
                   position = position_dodge(0.9)) +
@@ -393,7 +395,6 @@ PlotBarError <- function(x, name.grp = "obsr_grp",
     theme(axis.title.x = element_blank(),
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 }
-
 
 # 函数：从用户数据中筛除目标年份和用户组别，做带误差棒的条形图，对比新冠期间和此前的差别
 # 参数：
@@ -440,17 +441,20 @@ record.city.yr <- lapply(record.raw, SmryData, dur = "year") %>%
   CityLs2Df() %>%
   tibble() %>%
   # 生成年份缩写列用于作图
-  mutate(yr_sht = year - 2000)
+  mutate(yr_sht = year - 2000,
+         city = factor(city, levels = kCity))
 
 ### Monthly data ----
 # 构建各年份月度数据
 record.city.mth <- lapply(record.raw, SmryData, dur = "month") %>%
   CityLs2Df() %>%
-  tibble()
+  tibble() %>%
+  mutate(city = factor(city, levels = kCity))
 
 ### User data ----
 # 构建用户数据：各个城市各个用户各年份各指标的数值
-record.city.obsr.yr <- CityLs2Df(lapply(record.raw, SmryUserData))
+record.city.obsr.yr <- CityLs2Df(lapply(record.raw, SmryUserData)) %>%
+  mutate(city = factor(city, levels = kCity))
 # 检测是否有用户跨城市上传数据
 dim(unique(record.city.obsr.yr[c("city", "user", "year")]))
 dim(unique(record.city.obsr.yr[c("user", "year")]))
@@ -508,7 +512,7 @@ covid.mth <-
 ## Annual comparison ----
 # 作图：各城市各指标历年变化
 png(filename = "ProcData/历年各项指标变化.png", res = 300,
-    width = 3000, height = 4500)
+    width = 3000, height = 4000)
 (SerPlot(record.city.yr,
          var_ls =
            c(
@@ -605,6 +609,8 @@ dev.off()
 
 ### Metrics ~ years ----
 # 分用户组各指标不同年份对比
+png(filename = "ProcData/分用户组和指标各城市跨年份对比条形图.png", res = 300,
+    width = 3500, height =2000)
 ((PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs",
               name.yaxis = "Observation", name.title = "(a)") /
     PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
@@ -618,3 +624,4 @@ dev.off()
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
                   name.yaxis = "Obs. per day", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
+dev.off()
