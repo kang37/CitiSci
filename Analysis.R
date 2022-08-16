@@ -632,13 +632,13 @@ png(filename = "ProcData/分用户组和指标各城市跨年份对比条形图.
 ((PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs",
               name.yaxis = "Observation", name.title = "(a)") /
     PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
-                name.yaxis = "Observation", name.title = "(c)")) |
+                name.yaxis = "Observation", name.title = "(d)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "act_days",
-                name.yaxis = "Obs. day", name.title = "(e)") /
+                name.yaxis = "Obs. day", name.title = "(b)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "act_days",
-                  name.yaxis = "Obs. day", name.title = "(b)")) |
+                  name.yaxis = "Obs. day", name.title = "(e)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs_pd",
-                name.yaxis = "Obs. per day", name.title = "(d)") /
+                name.yaxis = "Obs. per day", name.title = "(c)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
                   name.yaxis = "Obs. per day", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
