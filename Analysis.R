@@ -125,7 +125,7 @@ SerPlot <- function(x, var_ls, plotname, dur = "month") {
   } else if (dur == "year") {
     for (i in 1:length(var_ls)) {
       plot_ls[[i]] <- ggplot(x) +
-        geom_line(aes_string("yr_sht", var_ls[i])) +
+        geom_line(aes_string("year", var_ls[i])) +
         theme(axis.text.x = element_text(angle = 90)) +
         labs(title = plotname[i], y = NULL, x = "") +
         facet_wrap(.~ city, nrow = 1, scales = "free")
@@ -527,25 +527,28 @@ covid.mth <-
 # 作图：各城市各指标历年变化
 png(filename = "ProcData/分指标和城市各年份指标值变化.png", res = 300,
     width = 3500, height = 4000)
-(SerPlot(record.city.yr,
-         var_ls =
-           c(
-             "obs", "users", "act_days",
-             "obs_per_user",
-             "actdays_per_user",
-             "obs_pu_pd",
-             "idpa", "id_rate"
-           ),
-         plotname =
-           c(
-             "(a) Observation", "(b) Observer",
-             "(c) Obs. day",
-             "(d) Obs. per observer",
-             "(e) Obs. day per observer",
-             "(f) Obs. per observer per obs. day",
-             "(g) Identification", "(h) Identification rate"
-           ),
-         dur = "year") %>%
+(SerPlot(
+  record.city.yr,
+  var_ls =
+    c(
+      "obs", "users",
+      "act_days",
+      "obs_per_user",
+      "actdays_per_user",
+      "obs_pu_pd",
+      "idpa"
+    ),
+  plotname =
+    c(
+      "(a) Number of observations", "(b) Number of observers",
+      "(c) Number of obs-days",
+      "(d) Per capita observations",
+      "(e) Per capita obs-days",
+      "(f) Per capita daily observations",
+      "(g) Number of identifications"
+    ),
+  dur = "year"
+) %>%
     Reduce("/", x = .) +
     plot_layout(guides = "collect") & theme(legend.position = "bottom"))
 dev.off()
@@ -579,19 +582,20 @@ png(filename = "ProcData/分指标和城市不同年份各月份指标值变化.
 SerPlot(
   record.city.mth,
   var_ls =
-    c("obs", "users", "act_days",
+    c("obs", "users",
+      "act_days",
       "obs_per_user",
       "actdays_per_user",
       "obs_pu_pd",
-      "idpa", "id_rate"),
+      "idpa"),
   plotname =
     c(
-      "(a) Observation", "(b) Observer",
-      "(c) Obs. day",
-      "(d) Obs. per observer",
-      "(e) Obs. day per observer",
-      "(f) Obs. per observer per obs. day",
-      "(g) Identification", "(h) Identification rate"
+      "(a) Number of observations", "(b) Number of observers",
+      "(c) Number of obs-days",
+      "(d) Per capita observations",
+      "(e) Per capita obs-days",
+      "(f) Per capita daily observations",
+      "(g) Number of identifications"
     )
 ) %>%
   Reduce("/", x = .) +
