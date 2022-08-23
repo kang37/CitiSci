@@ -625,13 +625,13 @@ dev.off()
 ### Metrics ~ user grps ----
 # 对比新老用户，看老用户在各项指标上是否都高于新用户
 png(filename = "ProcData/分指标各城市跨用户组对比条形图.png", res = 300,
-    width = 2000, height = 3500)
+    width = 2000, height = 1000)
 PlotCompObsr(record.city.obsr.yr, name.var = "obs",
-             name.yaxis = "Observation", name.title = "(a)") /
+             name.yaxis = "Observations", name.title = "(a)") +
   PlotCompObsr(record.city.obsr.yr, name.var = "act_days",
-               name.yaxis = "Obs. days", name.title = "(b)") /
+               name.yaxis = "Obs-days", name.title = "(b)") +
   PlotCompObsr(record.city.obsr.yr, name.var = "obs_pd",
-               name.yaxis = "Obs. per day", name.title = "(c)") +
+               name.yaxis = "Daily observations", name.title = "(c)") +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 # 盒形图也可以作为参考
