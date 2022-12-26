@@ -780,10 +780,11 @@ ggplot(lmdi) +
   theme_bw() +
   facet_grid(cityt ~ delt_sep) +
   scale_fill_manual(
-    name = "Effect\nDirection",
+    name = "Effect Direction",
     limits = c("1", "-1"),
     values = c("darkgreen", "darkred"),
     labels = c("Positive", "Negative")
   ) +
+  theme(legend.position = "bottom") +
   scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
   labs(x = "", y = "Scaled Effect")
