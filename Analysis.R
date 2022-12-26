@@ -4,6 +4,7 @@
 # Package ----
 library(openxlsx)
 library(dplyr)
+library(tidyr)
 library(ggplot2)
 library(patchwork)
 library(reshape2)
@@ -665,3 +666,122 @@ png(filename = "ProcData/分用户组和指标各城市跨年份对比条形图.
                   name.yaxis = "Daily observations", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
+
+### LMDI ----
+# 历年变化量分解
+# 建立空列表以存储结果：初级按长短期用户分组，次级按年份分组，各用户组各年份对应一个包含多城市数据的数据框
+lmdi.ls1 <- vector("list", length = 2)
+names(lmdi.ls1) <- c("long", "short")
+
+# get basic data for LMDI
+for (i in names(lmdi.ls1)) {
+  lmdi.ls1[[i]] <-
+    # get Oi (obs number of i group) and Pi (population of i group) first
+    record.city.obsr.yr %>%
+    subset(obsr_grp == i) %>%
+    group_by(city, year) %>%
+    summarise(Oi = sum(obs),
+              Pi = n()) %>%
+    ungroup()
+}
+for (i in names(lmdi.ls1)) {
+  lmdi.ls1[[i]] <- lmdi.ls1[[i]] %>%
+    # get total population column for both long- and short-term group
+    mutate(P = lmdi.ls1[["long"]]$Pi + lmdi.ls1[["short"]]$Pi) %>%
+    # other basic data
+    mutate(
+      # get Si (structure effect of i group)
+      Si = Pi / P,
+      # get Ii (intensity effect of i group)
+      Ii = Oi / Pi
+    )
+}
+
+lmdi.basic <-
+  # get Oi (obs number of i group) and Pi (population of i group) first
+  record.city.obsr.yr %>%
+  group_by(obsr_grp, city, year) %>%
+  summarise(Oi = sum(obs),
+            Pi = n()) %>%
+  ungroup()
+# 通过检测，发现Saitama2017年只有“long”用户，而Hiroshima2016只有“short”用户
+# table(lmdi.basic$city, lmdi.basic$year)
+# table(subset(lmdi.basic, city = "Saitam" & year == 2017)$obsr_grp)
+# table(subset(lmdi.basic, city == "Hiroshima" & year == 2016)$obsr_grp)
+# 因此补全这两行数据
+lmdi.basic <- rbind(
+  lmdi.basic,
+  tibble(
+    obsr_grp = c("short", "long"),
+    city = c("Saitama", "Hiroshima"),
+    year = c(2017, 2016),
+    Oi = 0,
+    Pi = 0
+  )
+) %>%
+  arrange(obsr_grp, city, year)
+# get total population column for both long- and short-term group
+lmdi.basic <- lmdi.basic %>%
+  left_join(
+    lmdi.basic %>%
+      group_by(city, year) %>%
+      summarise(P = sum(Pi)) %>%
+      ungroup(),
+    by = c("city", "year")
+  ) %>%
+  # other basic data
+  mutate(
+    # get Si (structure effect of i group)
+    Si = Pi / P,
+    # get Ii (intensity effect of i group)
+    Ii = Oi / Pi
+  )
+
+# get middle data
+lmdi.mid1.t <-
+  lmdi.basic %>%
+  subset(year != 2016) %>%
+  arrange(obsr_grp, city, year)
+names(lmdi.mid1.t) <- paste0(names(lmdi.mid1.t), "t")
+lmdi.mid1.0 <-
+  lmdi.basic %>%
+  subset(year != 2021) %>%
+  arrange(obsr_grp, city, year)
+names(lmdi.mid1.0) <- paste0(names(lmdi.mid1.0), "0")
+
+lmdi.mid2 <-
+  cbind(lmdi.mid1.t, lmdi.mid1.0) %>%
+  tibble() %>%
+  mutate(
+    Oit_Oi0 = Oit - Oi0,
+    ln_Oit_Oi0 = log(Oit / Oi0),
+    ln_Pt_P0 = log(Pt / P0),
+    ln_Sit_Si0 = log(Sit / Si0),
+    ln_Iit_Ii0 = log(Iit / Ii0)
+  ) %>%
+  # 进行累加
+  group_by(cityt, yeart) %>%
+  summarise(
+    # 总效应和效应分解
+    delt_O = sum(Oit_Oi0),
+    delt_P = sum(Oit_Oi0 / ln_Oit_Oi0 * ln_Pt_P0),
+    delt_S = sum(Oit_Oi0 / ln_Oit_Oi0 * ln_Sit_Si0),
+    delt_I = sum(Oit_Oi0 / ln_Oit_Oi0 * ln_Iit_Ii0)
+  ) %>%
+  ungroup()
+# bug: 0如何处理呢？
+lmdi.mid2 %>%
+  select(-delt_O) %>%
+  pivot_longer(cols = c(delt_P, delt_S, delt_I),
+               names_to = "effect", values_to = "val") %>%
+  ggplot() +
+  geom_col(aes(yeart, val)) +
+  facet_grid(cityt ~ effect, scales = "free")
+
+lmdi.mid2 %>%
+  select(-delt_O) %>%
+  pivot_longer(cols = c(delt_P, delt_S, delt_I),
+               names_to = "effect", values_to = "val") %>%
+  ggplot() +
+  geom_col(aes(effect, val)) +
+  facet_grid(cityt ~ yeart, scales = "free")
