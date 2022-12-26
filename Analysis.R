@@ -759,10 +759,7 @@ LMDI <- function() {
     )) %>%
     group_by(cityt, yeart) %>%
     # mutate(new = max(abs(delt_val)))
-    mutate(delt_val_scale =
-             (abs(delt_val) - min(abs(delt_val))) /
-             (max(abs(delt_val)) - min(abs(delt_val))) *
-             pos_neg)
+    mutate(delt_val_scale = abs(delt_val) / max(abs(delt_val)) * pos_neg)
   # bug: 如何标准化比较合适？本考虑将各分效应的值都除以总效应，同时保留该标准化值的正负号，但是有些年份的总效应太小，而分效应值太大，结果导致标准化值过大，可视化效果较差。
 
   return(lmdi.mid3)
