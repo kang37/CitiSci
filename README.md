@@ -1,8 +1,8 @@
 # CitiSci
-A research on the impact of COVID on citizen science in Japan. 
 
-# Codebook for data
+A study on the impact of COVID on citizen science in 11 cities of Japan. 
+In this study, based on iNaturalist citizen science platform data, the behavior change of citizen science users after COVID-19 has been explored, as well as the reason for the change: is it due to change of user population, or user structure, or activity intensity? 
 
-## Period of state of emergency in Japan.xlsx
-
-日本紧急事态的都道府县及相应时间。数据来源为：新型コロナウイルス感染症対策（链接：https://corona.go.jp/emergency/）> 新型コロナウイルス感染症緊急事態宣言の実施状況に関する報告（令和2年6月4日发出，链接：https://corona.go.jp/news/pdf/kinkyujitaisengen_houkoku0604.pdf）。
+This repo contains all the raw data and code to replicate the article xxx. 
+**data_raw** has the raw data. For details of the raw data, please see the code book in the file. 
+**src** contains the code for the analysis and visualization. 
