@@ -116,7 +116,7 @@ SerPlot <- function(x, var_ls, plotname, dur = "month") {
       # 将年份设置为因子以便分别赋予颜色
       x$year <- factor(x$year)
       plot_ls[[i]] <- ggplot(x) +
-        geom_line(aes_string("month", var_ls[i], color = "year")) +
+        geom_line(aes("month", var_ls[i], color = "year")) +
         scale_x_continuous(breaks = c(3, 6, 9, 12)) +
         scale_color_manual(
           values = c("2019" = "#00AF64", "2020" = "#bf5930", "2021" = "blue")) +
