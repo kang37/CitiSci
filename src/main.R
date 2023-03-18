@@ -625,9 +625,9 @@ dev.off()
 png(filename = "data_proc/分指标各城市跨用户组对比条形图.png", res = 300,
     width = 2000, height = 1000)
 PlotCompObsr(record.city.obsr.yr, name.var = "obs",
-             name.yaxis = "Observations", name.title = "(a)") +
+             name.yaxis = "Observation", name.title = "(a)") +
   PlotCompObsr(record.city.obsr.yr, name.var = "act_days",
-               name.yaxis = "Active days", name.title = "(b)") +
+               name.yaxis = "Active day", name.title = "(b)") +
   PlotCompObsr(record.city.obsr.yr, name.var = "obs_pd",
                name.yaxis = "Daily observation", name.title = "(c)") +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
@@ -650,17 +650,17 @@ dev.off()
 png(filename = "data_proc/分用户组和指标各城市跨年份对比条形图.png", res = 300,
     width = 2000, height =1800)
 ((PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs",
-              name.yaxis = "Observations", name.title = "(a)") /
+              name.yaxis = "Observation", name.title = "(a)") /
     PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
-                name.yaxis = "Observations", name.title = "(d)")) |
+                name.yaxis = "Observation", name.title = "(d)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "act_days",
-                name.yaxis = "Active days", name.title = "(b)") /
+                name.yaxis = "Active day", name.title = "(b)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "act_days",
-                  name.yaxis = "Active days", name.title = "(e)")) |
+                  name.yaxis = "Active day", name.title = "(e)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs_pd",
-                name.yaxis = "Daily observations", name.title = "(c)") /
+                name.yaxis = "Daily observation", name.title = "(c)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
-                  name.yaxis = "Daily observations", name.title = "(f)"))) +
+                  name.yaxis = "Daily observation", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 
