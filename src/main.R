@@ -91,6 +91,7 @@ SmryData <- function(x, dur = "month") {
 
   return(x_output)
 }
+# bug: need to delete the unused metrics code finally
 
 # 函数：将多城市数据合并为一个数据框
 CityLs2Df <- function(x) {
@@ -550,21 +551,17 @@ png(filename = "data_proc/分指标和城市各年份指标值变化.png", res =
   record.city.yr,
   var_ls =
     c(
-      "obs", "users",
-      "act_days",
+      "obs",
+      "users",
       "obs_per_user",
-      "actdays_per_user",
-      "obs_pu_pd",
-      "idpa"
+      "obs_pu_pd"
     ),
   plotname =
     c(
-      "(a) Number of observations", "(b) Number of observers",
-      "(c) Number of obs-days",
-      "(d) Per capita observations",
-      "(e) Per capita obs-days",
-      "(f) Per capita daily observations",
-      "(g) Number of identifications"
+      "(a) Number of observations",
+      "(b) Number of active users",
+      "(c) Number of observations per active user",
+      "(d) Number of observations per active user per active day"
     ),
   dur = "year"
 ) %>%
