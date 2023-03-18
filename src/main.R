@@ -416,7 +416,7 @@ PlotCompObsr <- function(x, name.var, name.title, ...) {
 
   MeanSeAov(x, name.var = name.var) %>%
     PlotBarError(name.title = name.title, ...) +
-    scale_fill_manual(name = "Observer group", values = c("#FFA500", "#1047A9")) +
+    scale_fill_manual(name = "User group", values = c("#FFA500", "#1047A9")) +
     # 横轴标签按照城市进行排序
     scale_x_discrete(limits = paste0(x.axis.lab$city, x.axis.lab$aov_mark))
 }
@@ -546,7 +546,7 @@ covid.mth <-
 ## Annual comparison ----
 # 作图：各城市各指标历年变化
 png(filename = "data_proc/分指标和城市各年份指标值变化.png", res = 300,
-    width = 3500, height = 4000)
+    width = 3500, height = 2000)
 (SerPlot(
   record.city.yr,
   var_ls =
@@ -627,9 +627,9 @@ png(filename = "data_proc/分指标各城市跨用户组对比条形图.png", re
 PlotCompObsr(record.city.obsr.yr, name.var = "obs",
              name.yaxis = "Observations", name.title = "(a)") +
   PlotCompObsr(record.city.obsr.yr, name.var = "act_days",
-               name.yaxis = "Obs-days", name.title = "(b)") +
+               name.yaxis = "Active days", name.title = "(b)") +
   PlotCompObsr(record.city.obsr.yr, name.var = "obs_pd",
-               name.yaxis = "Daily observations", name.title = "(c)") +
+               name.yaxis = "Daily observation", name.title = "(c)") +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
 dev.off()
 # 盒形图也可以作为参考
@@ -654,9 +654,9 @@ png(filename = "data_proc/分用户组和指标各城市跨年份对比条形图
     PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
                 name.yaxis = "Observations", name.title = "(d)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "act_days",
-                name.yaxis = "Obs-days", name.title = "(b)") /
+                name.yaxis = "Active days", name.title = "(b)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "act_days",
-                  name.yaxis = "Obs-days", name.title = "(e)")) |
+                  name.yaxis = "Active days", name.title = "(e)")) |
    (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs_pd",
                 name.yaxis = "Daily observations", name.title = "(c)") /
       PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
