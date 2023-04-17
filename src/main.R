@@ -764,18 +764,23 @@ LMDI <- function() {
 
   return(lmdi.mid3)
 }
-
 lmdi <- LMDI() %>%
   mutate(delt_sep = case_when(
-    delt_sep == "delt_P" ~ "Population Eff.",
-    delt_sep == "delt_S" ~ "Structure Eff.",
-    delt_sep == "delt_I" ~ "Intensity Eff."
+    delt_sep == "delt_P" ~ "Population\n Effect",
+    delt_sep == "delt_S" ~ "Structure\n Effect",
+    delt_sep == "delt_I" ~ "Intensity\n Effect"
   )) %>%
   mutate(delt_sep = factor(
     delt_sep,
-    levels = c("Population Eff.", "Structure Eff.", "Intensity Eff.")
+    levels =
+      c("Population\n Effect", "Structure\n Effect", "Intensity\n Effect")
   ))
-ggplot(lmdi) +
+
+# visualization
+# original plot
+png(filename = "data_proc/LMDI_effect_1.png", res = 300,
+    width = 1800, height = 2200)
+(ggplot(lmdi) +
   geom_col(aes(yeart, delt_val_scale, fill = as.character(pos_neg))) +
   theme_bw() +
   facet_grid(cityt ~ delt_sep) +
@@ -787,4 +792,28 @@ ggplot(lmdi) +
   ) +
   theme(legend.position = "bottom") +
   scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
-  labs(x = "", y = "Scaled Effect")
+  labs(x = "", y = "Scaled Effect"))
+dev.off()
+
+# line plot
+png(filename = "data_proc/LMDI_effect_2.png", res = 300,
+    width = 2000, height = 1500)
+(ggplot(lmdi) +
+    geom_line(aes(yeart, delt_val_scale, group = cityt, col = cityt)) +
+    theme_bw() +
+    facet_wrap(.~ delt_sep))
+dev.off()
+
+# tile plot
+png(filename = "data_proc/LMDI_effect_3.png", res = 300,
+    width = 2400, height = 1500)
+(ggplot(lmdi, aes(x = yeart, y = ordered(cityt, levels = rev(levels(cityt))))) +
+    geom_tile(aes(fill = delt_val_scale)) +
+    theme_bw() +
+    scale_fill_gradient2(
+      name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
+    ) +
+    geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
+    facet_wrap(.~ delt_sep) +
+    labs(x = "", y = "City"))
+dev.off()
