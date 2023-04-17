@@ -431,14 +431,6 @@ tar.city <- record.city.yr %>%
   pull(city)
 record.city.yr <- filter(record.city.yr, city %in% tar.city)
 
-### Monthly data ----
-# 构建各年份月度数据
-record.city.mth <- lapply(record.raw, SmryData, dur = "month") %>%
-  CityLs2Df() %>%
-  tibble() %>%
-  mutate(city = factor(city, levels = kCity)) %>%
-  filter(city %in% tar.city)
-
 ### User data ----
 # 构建用户数据：各个城市各个用户各年份各指标的数值
 record.city.obsr.yr <- CityLs2Df(lapply(record.raw, SmryUserData)) %>%
@@ -516,34 +508,6 @@ ggplot(record.city.yr) +
   geom_point(aes(obs, idpa, color = factor(year))) +
   facet_wrap(.~ city, scales = "free")
 # 结论：两者几乎就是线性相关的，可以推测鉴定条数增加主要由观测条数驱动，一定程度上，和“室外活动减少，室内活动增加”的结论形成对比。当然不排除一种可能性，即说不定室内活动减少得幅度较低，而室外活动受到影响更大，减少得较多。这种可能性也可以检测，但因为这些变化受多种因素影响，就算检测了，结果也未必可靠，因此暂时不检测。
-
-## Monthly comparison ----
-# 作图：历年各月份是否展现出什么类似的趋势
-png(filename = "data_proc/分指标和城市不同年份各月份指标值变化.png", res = 300,
-    width = 3000, height = 4500)
-SerPlot(
-  record.city.mth,
-  var_ls =
-    c("obs", "users",
-      "act_days",
-      "obs_per_user",
-      "actdays_per_user",
-      "obs_pu_pd",
-      "idpa"),
-  plotname =
-    c(
-      "(a) Number of observations", "(b) Number of observers",
-      "(c) Number of obs-days",
-      "(d) Per capita observations",
-      "(e) Per capita obs-days",
-      "(f) Per capita daily observations",
-      "(g) Number of identifications"
-    )
-) %>%
-  Reduce("/", x = .) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-dev.off()
-# 结论：各年份中，数据各月份变化并无固定规律。原本还比较了2020年各月份同2019年对应月份之间的差异，但是既然多年来各月份的“基线数据”就没有明显固定的规律，那么这样的同期比较也就没有意义了。因此就把这部分分析删除了。出于相同的原因，也删除了新冠数据和各年月度数据之间的关系分析代码，因为2020年或者2021年各月份的指标数据变化可能是随机因素导致的，而非新冠导致的。
 
 ## User group analysis ----
 ### Metrics ~ user grps ----
