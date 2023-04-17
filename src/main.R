@@ -478,17 +478,29 @@ record.city.yr <- lapply(record.raw, SmryData, dur = "year") %>%
   mutate(yr_sht = year - 2000,
          city = factor(city, levels = kCity))
 
+# only keep cities with hihger max user number
+# get the target cities
+tar.city <- record.city.yr %>%
+  group_by(city) %>%
+  summarise(users = max(users)) %>%
+  ungroup() %>%
+  filter(users > 50) %>%
+  pull(city)
+record.city.yr <- filter(record.city.yr, city %in% tar.city)
+
 ### Monthly data ----
 # 构建各年份月度数据
 record.city.mth <- lapply(record.raw, SmryData, dur = "month") %>%
   CityLs2Df() %>%
   tibble() %>%
-  mutate(city = factor(city, levels = kCity))
+  mutate(city = factor(city, levels = kCity)) %>%
+  filter(city %in% tar.city)
 
 ### User data ----
 # 构建用户数据：各个城市各个用户各年份各指标的数值
 record.city.obsr.yr <- CityLs2Df(lapply(record.raw, SmryUserData)) %>%
-  mutate(city = factor(city, levels = kCity))
+  mutate(city = factor(city, levels = kCity)) %>%
+  filter(city %in% tar.city)
 # 检测是否有用户跨城市上传数据
 dim(unique(record.city.obsr.yr[c("city", "user", "year")]))
 dim(unique(record.city.obsr.yr[c("user", "year")]))
@@ -678,16 +690,7 @@ LMDI <- function() {
   # table(subset(lmdi.basic, city = "Saitam" & year == 2017)$obsr_grp)
   # table(subset(lmdi.basic, city == "Hiroshima" & year == 2016)$obsr_grp)
   # 因此补全这两行数据
-  lmdi.basic <- rbind(
-    lmdi.basic,
-    tibble(
-      obsr_grp = c("short", "long"),
-      city = c("Saitama", "Hiroshima"),
-      year = c(2017, 2016),
-      Oi = 0,
-      Pi = 0
-    )
-  ) %>%
+  lmdi.basic <- lmdi.basic %>%
     arrange(obsr_grp, city, year)
   # get total population column for both long- and short-term group
   lmdi.basic <- lmdi.basic %>%
