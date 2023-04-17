@@ -190,63 +190,6 @@ MthChg1920 <- function(x) {
   return(x_mthchg)
 }
 
-# 函数：可视化各项指标2019-2020年差异的各月变化及与新冠的关系
-# 输入：各城市各年月的各项指标2019-2020年变化率数据，新冠月度数据
-# 输出：可视化各月数据变化，及与新冠相关性图
-SerPlotMthChg1920 <- function(x) {
-  x_lng <- melt(x, id = c("city", "month"))
-  # 可视化各月数据变化
-  p1 <- ggplot(x_lng) +
-    geom_line(aes(month, value)) +
-    facet_grid(variable ~ city, scales = "free")
-  print(p1)
-  # 2019-2020各指标变化率与新冠相关性图
-  x_lng <- merge(x_lng, covid.mth,
-                 by.x = c("city", "month"), by.y = c("city_en", "month"))
-  p2 <- ggplot(x_lng) +
-    geom_point(aes(number, value), alpha = 0.4) +
-    facet_grid(variable ~ city, scales = "free")
-  print(p2)
-}
-
-# 函数：检验各城市2020年各月不同指标数据和对应新冠感染数的相关关系
-# 输入：各城市2020年各月不同指标数据数据框，各城市2020各月新冠感染数数据框
-# 输出：各城市2020年各月不同指标和新冠感染数相关关系的p值数据
-CorCovid <- function(x, testvar, covid_df) {
-  # 建立空数据框用于存储数据
-  x_output <- vector("list", length = length(testvar))
-  names(x_output) <- testvar
-
-  # 将2020年公民科学数据和新冠数据合并
-  x_covid <-
-    merge(x, covid_df,
-          by.x = c("city", "month"), by.y = c("city_en", "month"),
-          all.x = TRUE)
-
-  # 按照城市分成分组列表
-  x_ls <- split(x_covid, x_covid$city)
-
-  # 分城市进行相关性检验
-  for (i in testvar) {
-    cor_ls <- lapply(x_ls, function(y) {
-      cor.test(y[, i], y$number)$p.value < 0.05
-    })
-    x_output[[i]] <- Reduce(rbind, cor_ls)
-  }
-
-  # 将结果列表合并为数据框
-  x_output <- Reduce(cbind, x_output)
-  x_output <- as.data.frame(x_output)
-  x_output <- cbind(names(x_ls), x_output)
-  names(x_output) <- c("city", testvar)
-  rownames(x_output) <- NULL
-  print(x_output)
-
-  # 结果可视化
-  ggplot(melt(x_output, id = "city")) +
-    geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.6)
-}
-
 # 函数：2019-2020年各项指标环比数据
 # 输入：各城市各年月的各项指标数据
 # 输出：各城市各年月的各项指标相比去年同期的变化率
@@ -524,35 +467,6 @@ record.city.obsr.yr <- record.city.obsr.yr %>%
   left_join(user.grp, by = "user") %>%
   # 观测总年数大于等于2年都划为老用户
   mutate(obsr_grp = case_when(n_yr <= 1 ~ "short", TRUE ~ "long"))
-
-## COVID-19 data ----
-# bug：之后删除结论
-# 基本结论：
-# 基本上从二月~四月开始受影响
-# 结合十月份的数据，可见不仅受政策，也受到实际疫情数据的影响
-
-# 读取数据：日期，县，各感染者数量
-# 此处把县和城市信息加进去后可能会引起误解，误以为感染者人数是各城市的感染者人数，但实际上感染者人数是所在县的感染者人数-人受信息的影响可能存在尺度效应
-covid.mth <-
-  read.csv("data_raw/nhk_news_covid19_prefectures_daily_data.csv") %>%
-  rename(date = "日付", prefecture_jp = "都道府県名",
-         pref_inf = "各地の感染者数_1日ごとの発表数") %>%
-  as_tibble() %>%
-  select(date, prefecture_jp, pref_inf) %>%
-  # 筛选出目标县
-  subset(prefecture_jp %in% pref.city$prefecture_jp) %>%
-  # 加入县英文名和城市名信息
-  left_join(pref.city, by = "prefecture_jp") %>%
-  # 更改数据类型
-  mutate(date = as.Date(date)) %>%
-  mutate(year = year(date), month = month(date)) %>%
-  # 保留2020年的数据
-  subset(year == 2020) %>%
-  group_by(prefecture, city, month) %>%
-  summarise(pref_inf = sum(pref_inf), .groups = "drop_last") %>%
-  ungroup() %>%
-  # bug：权宜之计：按照从北到南对城市进行排序
-  mutate(prefecture = factor(prefecture, levels = kCity))
 
 # Analysis ----
 ## Annual comparison ----
