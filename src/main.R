@@ -102,10 +102,14 @@ record.yr <- record.user.yr %>%
   summarise(
     obs = sum(obs),
     user_pop = n(),
-    prop_long_user = sum(obsr_grp == "long") / user_pop,
-    obs_per_user = obs / user_pop
+    act_day = sum(act_day),
+    prop_long_user = sum(obsr_grp == "long") / user_pop
   ) %>%
-  ungroup()
+  ungroup() %>%
+  mutate(
+    day_per_user = act_day / user_pop,
+    obs_per_day = obs / act_day
+  )
 
 # Analysis ----
 ## Observation change ----
@@ -155,12 +159,12 @@ png(filename = "data_proc/Index_change_for_each_city_1.png", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
-    select(city, yr_short, user_pop, prop_long_user, obs_per_user) %>%
-    pivot_longer(cols = c(user_pop, prop_long_user, obs_per_user),
+    select(city, yr_short, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+    pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
                  names_to = "index", values_to = "index_val") %>%
     mutate(
       index = factor(
-        index, levels = c("user_pop", "prop_long_user", "obs_per_user"))
+        index, levels = c("user_pop", "prop_long_user", "day_per_user", "obs_per_day"))
     ) %>%
     ggplot() +
     geom_line(
@@ -174,8 +178,8 @@ png(filename = "data_proc/Index_change_for_each_city_2.png", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
-    select(city, yr_short, user_pop, prop_long_user, obs_per_user) %>%
-    pivot_longer(cols = c(user_pop, prop_long_user, obs_per_user),
+    select(city, yr_short, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+    pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
                  names_to = "index", values_to = "index_val") %>%
     group_by(city, index) %>%
     mutate(
@@ -186,7 +190,7 @@ png(filename = "data_proc/Index_change_for_each_city_2.png", res = 300,
     geom_line(
       aes(as.numeric(as.character(yr_short)), index_val_scale, col = city)
     ) +
-    facet_wrap(.~ index, scales = "free")
+    facet_wrap(.~ index, scales = "free", nrow = 1)
 )
 dev.off()
 
@@ -198,23 +202,23 @@ CompTwoYr(record.yr, yr.base = 16, yr.tar = 17) /
   CompTwoYr(record.yr, yr.base = 20, yr.tar = 21)
 # 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
 
-### LMDI ----
+## LMDI ----
 lmdi <- record.user.yr %>%
   group_by(city, year, obsr_grp) %>%
-  summarise(o_i = sum(obs), p_i = n()) %>%
+  summarise(o_i = sum(obs), p_i = n(), d_i = sum(act_day)) %>%
   arrange(city, year, obsr_grp)
 # check data
 table(lmdi$city, lmdi$year, lmdi$obsr_grp)
 
 lmdi <- inner_join(
   lmdi %>%
-    rename(year_0 = year, o_i0 = o_i, p_i0 = p_i) %>%
+    rename(year_0 = year, o_i0 = o_i, p_i0 = p_i, d_i0 = d_i) %>%
     mutate(year_t = as.factor(as.numeric(as.character(year_0)) + 1)),
   lmdi %>%
-    rename(year_t = year, o_it = o_i, p_it = p_i),
+    rename(year_t = year, o_it = o_i, p_it = p_i, d_it = d_i),
   by = c("city", "year_t", "obsr_grp")
 ) %>%
-  select(city, year_0, year_t, obsr_grp, o_i0, o_it, p_i0, p_it) %>%
+  select(city, year_0, year_t, obsr_grp, o_i0, o_it, p_i0, p_it, d_i0, d_it) %>%
   filter(!(city == "Kawasaki" & (year_0 == "2017" | year_t == "2017"))) %>%
   filter(!(city == "Nagoya" & (year_0 == "2016" | year_t == "2016"))) %>%
   group_by(city, year_0) %>%
@@ -232,12 +236,15 @@ lmdi <- lmdi %>%
   mutate(
     s_i0 = p_i0 / p_0,
     s_it = p_it / p_t,
-    i_i0 = o_i0 / p_i0,
-    i_it = o_it / p_it
+    f_i0 = d_i0 / p_i0,
+    f_it = d_it / p_it,
+    i_i0 = o_i0 / p_i0 / d_i0,
+    i_it = o_it / p_it / d_it
   ) %>%
   mutate(
     delt_p_i = (o_it - o_i0) / log(o_it / o_i0) * log(p_t / p_0),
     delt_s_i = (o_it - o_i0) / log(o_it / o_i0) * log(s_it / s_i0),
+    delt_f_i = (o_it - o_i0) / log(o_it / o_i0) * log(f_it / f_i0),
     delt_i_i = (o_it - o_i0) / log(o_it / o_i0) * log(i_it / i_i0)
   ) %>%
   group_by(city, year_t, year_0) %>%
@@ -246,6 +253,7 @@ lmdi <- lmdi %>%
     o_t = sum(o_it),
     delt_p = sum(delt_p_i),
     delt_s = sum(delt_s_i),
+    delt_f = sum(delt_f_i),
     delt_i = sum(delt_i_i)
   ) %>%
   ungroup() %>%
@@ -257,7 +265,7 @@ png(filename = "data_proc/LMDI_effect_1.png", res = 300,
     width = 1800, height = 2200)
 (lmdi %>%
     select(-o_0, -o_t, -delt_o) %>%
-    pivot_longer(cols = c(delt_p, delt_s, delt_i),
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
                  names_to = "delt", values_to = "delt_val") %>%
     group_by(city, year_t, year_0) %>%
     mutate(delt_abs_max = max(abs(delt_val))) %>%
@@ -267,7 +275,7 @@ png(filename = "data_proc/LMDI_effect_1.png", res = 300,
       delt_val_scale > 0 ~ 1,
       TRUE ~ -1
     )) %>%
-    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_i"))) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
     ggplot() +
     geom_col(aes(year_t, delt_val_scale, fill = as.character(pos_neg))) +
     theme_bw() +
@@ -288,13 +296,13 @@ png(filename = "data_proc/LMDI_effect_2.png", res = 300,
     width = 2000, height = 1500)
 (lmdi %>%
     select(-o_0, -o_t, -delt_o) %>%
-    pivot_longer(cols = c(delt_p, delt_s, delt_i),
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
                  names_to = "delt", values_to = "delt_val") %>%
     group_by(city, year_t, year_0) %>%
     mutate(delt_abs_max = max(abs(delt_val))) %>%
     ungroup() %>%
     mutate(delt_val_scale = delt_val / delt_abs_max) %>%
-    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_i"))) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
     ggplot() +
     geom_line(aes(year_t, delt_val_scale, group = city, col = city)) +
     theme_bw() +
@@ -306,13 +314,13 @@ png(filename = "data_proc/LMDI_effect_3.png", res = 300,
     width = 2400, height = 1500)
 (lmdi %>%
     select(-o_0, -o_t, -delt_o) %>%
-    pivot_longer(cols = c(delt_p, delt_s, delt_i),
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
                  names_to = "delt", values_to = "delt_val") %>%
     group_by(city, year_t, year_0) %>%
     mutate(delt_abs_max = max(abs(delt_val))) %>%
     ungroup() %>%
     mutate(delt_val_scale = delt_val / delt_abs_max) %>%
-    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_i"))) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
     ggplot(aes(year_t, city)) +
     geom_tile(aes(fill = delt_val_scale)) +
     # theme_bw() +
@@ -320,6 +328,6 @@ png(filename = "data_proc/LMDI_effect_3.png", res = 300,
       name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
     ) +
     geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
-    facet_wrap(.~ delt) +
+    facet_wrap(.~ delt, nrow = 1) +
     labs(x = "", y = "City"))
 dev.off()
