@@ -6,391 +6,13 @@ library(openxlsx)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(ggh4x)
 library(patchwork)
 library(reshape2)
 library(lubridate)
 
 # Function ----
-# 函数：按年或月汇总计算记录数、活跃用户数、活跃天数等数据
-# 参数：
-# x：含日期、user_id等信息的每条观测原始数据
-# dur：按照什么粒度进行汇总，“month”或“year”
-SmryData <- function(x, dur = "month") {
-  # 在原数据基础上加上鉴定者数列
-  x$idpa <- x$num_identification_agreements +
-    x$num_identification_disagreements
-
-  # 月度和年度计算方法不同
-  if (dur == "month") {
-    # 记录数即每个月的数据记录条数
-    x_obs <- aggregate(observed_on ~ year + month, data = x, FUN = "length")
-    names(x_obs) <- c("year", "month", "obs")
-
-    # 有鉴定的观测数：鉴定用户数大于0的观测数
-    x_obsid <-
-      aggregate(idpa ~ year + month, data = x,
-                FUN = function(y) {sum(y > 0)})
-    names(x_obsid) <- c("year", "month", "obs_id")
-
-    # 历年参与鉴定的用户数
-    x_idpa <- aggregate(idpa ~ year + month, data = x, FUN = "sum")
-
-    # 用户数即每个月的不重复用户数
-    x_users <- unique(x[c(c("year", "month", "user_id"))])
-    x_users <- aggregate(
-      x_users[, "user_id"],
-      by = list(x_users$year, x_users$month), FUN = "length"
-    )
-    names(x_users) <- c("year", "month", "users")
-
-    # 活跃天数即每个月的各用户的活跃天数之和
-    x_actdays <- unique(x[c("user_id", "year", "month", "day")])
-    x_actdays <- aggregate(
-      x_actdays[, "user_id"],
-      by = list(x_actdays$year, x_actdays$month), FUN = "length")
-    names(x_actdays) <- c("year", "month", "act_days")
-
-  } else if (dur == "year") {
-    # 历年观测数
-    x_obs <- aggregate(x[, "observed_on"], by = list(x$year), FUN = "length")
-    names(x_obs) <- c("year", "obs")
-
-    # 历年有鉴定的观测数
-    # 判断鉴定用户数大于0的观测数
-    x_obsid <-
-      aggregate(idpa ~ year, data = x,
-                FUN = function(y) {sum(y > 0)})
-    names(x_obsid) <- c("year", "obs_id")
-
-    # 历年参与鉴定的用户数
-    x_idpa <- aggregate(idpa ~ year, data = x, FUN = "sum")
-
-    # 用户数即每个月的不重复用户数
-    x_users <- unique(x[c(c("year", "user_id"))])
-    x_users <- aggregate(
-      x_users[, "user_id"], by = list(x_users$year), FUN = "length"
-    )
-    names(x_users) <- c("year", "users")
-
-    # 活跃天数即每个月的各用户的活跃天数之和
-    x_actdays <- unique(x[c("user_id", "year", "day")])
-    x_actdays <- aggregate(
-      x_actdays[, "user_id"],
-      by = list(x_actdays$year), FUN = "length")
-    names(x_actdays) <- c("year", "act_days")
-  }
-
-  # 合并结果：默认根据year或者year + month进行merge
-  x_output <- Reduce(merge, list(x_obs, x_obsid, x_idpa, x_users, x_actdays))
-
-  # 计算人均记录数、人均活跃天数、人均日均记录数、观测鉴定率
-  x_output$obs_per_user <- x_output$obs / x_output$users
-  x_output$actdays_per_user <- x_output$act_days / x_output$users
-  x_output$obs_pu_pd <- x_output$obs / x_output$users / x_output$act_days
-  x_output$id_rate <- x_output$obs_id / x_output$obs
-
-  return(x_output)
-}
-# bug: need to delete the unused metrics code finally
-
-# 函数：将多城市数据合并为一个数据框
-CityLs2Df <- function(x) {
-  # 给列表中每个元素数据框加上对应的元素名
-  for (i in names(x)) {
-    x[[i]][, "city"] <- i
-  }
-  x <- Reduce(rbind, x)
-  colnames_x <- c("city", names(x)[!names(x) %in% "city"])
-  x <- x[colnames_x]
-  return(x)
-}
-
-# 函数：按照列名批量生成图片并存储在列表中
-SerPlot <- function(x, var_ls, plotname, dur = "month") {
-  # 构建存放图片的列表
-  plot_ls <- vector("list", length(var_ls))
-  names(plot_ls) <- var_ls
-
-  # 循环作图并存储
-  if (dur == "month") {
-    for (i in 1:length(var_ls)) {
-      # 将年份设置为因子以便分别赋予颜色
-      x$year <- factor(x$year)
-      plot_ls[[i]] <- ggplot(x) +
-        geom_line(aes("month", var_ls[i], color = "year")) +
-        scale_x_continuous(breaks = c(3, 6, 9, 12)) +
-        scale_color_manual(
-          values = c("2019" = "#00AF64", "2020" = "#bf5930", "2021" = "blue")) +
-        labs(title = plotname[i], y = NULL, x = "") +
-        facet_wrap(.~ city, nrow = 1, scales = "free")
-    }
-  } else if (dur == "year") {
-    for (i in 1:length(var_ls)) {
-      plot_ls[[i]] <- ggplot(x) +
-        geom_line(aes_string("year", var_ls[i])) +
-        theme(axis.text.x = element_text(angle = 90)) +
-        labs(title = plotname[i], y = NULL, x = "") +
-        facet_wrap(.~ city, nrow = 1, scales = "free")
-    }
-  }
-  return(plot_ls)
-}
-
-# 函数：对比各城市2019和2020年的数据并可视化
-# 参数：
-# x：各城市各年份各项指标数值数据框
-# yr.base：基准年
-# yr.tar：对比年份
-CompTwoYr <- function(x, yr.base, yr.tar) {
-  # 将数据分成基准年和比较年两部分并且按照城市排序
-  x1 <- subset(x, year == yr.base) %>%
-    mutate(city = factor(city, levels = kCity)) %>%
-    arrange(city)
-  x2 <- subset(x, year == yr.tar) %>%
-    mutate(city = factor(city, levels = kCity)) %>%
-    arrange(city)
-
-  # 计算各项数值的差异
-  # 如果比较年比基准年高则判断为TRUE
-  cbind(city = as.character(x1$city),
-        ifelse(x2[names(x2)[!names(x2) %in% c("city", "year", "yr_sht")]] /
-                 x1[names(x1)[!names(x1) %in% c("city", "year", "yr_sht")]] > 1,
-               paste0(yr.tar, " > ", yr.base),
-               paste0(yr.tar, " <= ", yr.base))) %>%
-    as.data.frame() %>%
-    # 转化成长数据并作图
-    melt(data = ., id = "city") %>%
-    mutate(city = factor(city, levels = kCity)) %>%
-    ggplot() +
-    geom_tile(aes(x = city, y = variable, fill = value), alpha = 0.5) +
-    theme(axis.text.x = element_text(angle = 90))
-}
-
-# 函数：计算2020年每月相比上年相同月份的变化率
-# 输入：各城市各年月的各项指标数据
-# 输出：各城市各年月的各项指标相比去年同期的变化率
-MthChg1920 <- function(x) {
-  # 分别构建2019年和2020年的数据框
-  x_2019 <- subset(x, year == 2019)
-  x_2019 <- x_2019[, -grep("year", names(x_2019))]
-  x_2019 <- x_2019[order(x_2019$city, x_2019$month), ]
-  x_2020 <- subset(x, year == 2020)
-  x_2020 <- x_2020[, -grep("year", names(x_2020))]
-  x_2020 <- x_2020[order(x_2020$city, x_2020$month), ]
-
-  # 计算2020年相对于2019年的变化率
-  x_mthchg <- cbind(
-    x_2019[c("city", "month")],
-    (x_2020[names(x_2020)[!names(x_2020) %in% c("city", "month")]] -
-       x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]) /
-      x_2019[names(x_2019)[!names(x_2019) %in% c("city", "month")]]
-  )
-
-  # 输出数据
-  return(x_mthchg)
-}
-
-# 函数：2019-2020年各项指标环比数据
-# 输入：各城市各年月的各项指标数据
-# 输出：各城市各年月的各项指标相比去年同期的变化率
-SeqChg1920 <- function(x) {
-  # 构建所需数据的完整城市、年、月数据框
-  x_1920 <- data.frame(
-    city = rep(unique(x$city), each = 3*12),
-    year = rep(rep(c(2018:2020), each = 12), length(unique(x$city))),
-    month = rep(rep(1:12, 3), length(unique(x$city)))
-  )
-  # 将输入数据合并到该数据框
-  x_1920 <- merge(x_1920, x, by = c("city", "year", "month"), all.x = TRUE)
-
-  # 构建延迟数据列
-  funin_lag <- function(y) {
-    c(NA, y[1: (length(y) - 1)])
-  }
-  x_1920_pre <- as.data.frame(
-    apply(x_1920[names(x_1920)[!names(x_1920) %in% c("city", "year", "month")]],
-          2, funin_lag))
-  x_1920_pre <- cbind(
-    city = x_1920$city,
-    year = x_1920$year,
-    month = x_1920$month,
-    x_1920_pre
-  )
-
-  # 构建空输出数据框
-  x_output <- data.frame(
-    city = x_1920$city,
-    year = x_1920$year,
-    month = x_1920$month
-  )
-  x_output <- subset(x_output, year %in% c(2019, 2020))
-
-  # 仅保留2019和2020年目标列的数据
-  x_1920 <- subset(x_1920, year %in% c(2019, 2020),
-                   select = names(x_1920)[!names(x_1920) %in%
-                                            c("city", "year", "month")])
-  x_1920_pre <- subset(x_1920_pre, year %in% c(2019, 2020),
-                       select = names(x_1920_pre)[!names(x_1920_pre) %in%
-                                                    c("city", "year", "month")])
-
-  # 计算环比
-  x_output <- cbind(x_output, (x_1920 - x_1920_pre) / x_1920_pre)
-
-  # 输出结果
-  return(x_output)
-}
-
-# 函数：读取公民科学各条记录文件合成一个列表，列表各元素分别为各个城市的数据
-# 参数：
-# name.dir：路径名称
-GetObs <- function(name.dir) {
-  # Get all *.csv file names in the file
-  filenames <- list.files(name.dir) %>%
-    grep(".csv", x = ., value = TRUE)
-
-  # a new list to store raw data
-  record <- vector("list", length = length(filenames))
-  names(record) <- gsub(".csv", "", filenames)
-
-  for (i in 1:length(filenames)) {
-    record[[i]] <- read.csv(paste0(name.dir, "/", filenames[i])) %>%
-      tibble() %>%
-      # 生成年月日数据
-      mutate(observed_on = as.Date(observed_on),
-             year = year(observed_on),
-             month = month(observed_on),
-             day = day(observed_on)) %>%
-      # 由于有些城市只有2016年及之后的数据，所以就保留共同年份的数据
-      subset(year > 2015)
-  }
-
-  return(record)
-}
-
-# 函数：输出各用户各年份观测条数、观测天数及每观测天观测条数，该数据主要用于用户分析
-# 参数：
-# x：带有城市、用户、观测条数等的原始数据
-SmryUserData <- function(x) {
-  x$year <- factor(x$year)
-  x$day <- factor(x$day)
-
-  x_output <- x %>%
-    group_by(year, user_id) %>%
-    summarise(obs = n(),
-              act_days = n_distinct(day),
-              obs_pd = obs/act_days) %>%
-    ungroup() %>%
-    rename(user = user_id)
-
-  return(x_output)
-}
-
-# 函数：分组计算输入数据的样本量、均值、SD、SE和统计检验结果等，用于用户分析
-# 参数：
-# x：各城市各用户带分组信息的数据
-# name.var：要分析的指标
-# 输出：各城市统计整理后的数据框
-MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
-  # 对各城市分组计算样本量、均值、SD
-  x_output <- x %>%
-    group_by(city, get(name.grp)) %>%
-    summarise(
-      n = n(),
-      mean = mean(get(name.var)),
-      sd = sd(get(name.var)),
-      se = sd/n
-    ) %>%
-    ungroup()
-  names(x_output)[which(names(x_output) == "get(name.grp)")] <- name.grp
-
-  # 对各个城市统计对比不同分组之间的差异
-  x_aov <- vector("logical")
-  for (i in unique(x$city)) {
-    x_city <- subset(x, city == i)
-    x_aov <-
-      c(x_aov,
-        summary(
-          aov(formula = x_city[[name.var]] ~
-                x_city[[name.grp]]))[[1]]$"Pr(>F)"[1] < 0.05)
-  }
-  x_aov <- data.frame(city = unique(x$city), aov = x_aov)
-
-  # 合并统计结果到输出数据框
-  x_output <- merge(x_output, x_aov, all.x = TRUE)
-  x_output$aov_mark <- "   "
-  x_output$aov_mark[x_output$aov] <- " * "
-
-  # 根据城市排序
-  x_output <- x_output %>%
-    mutate(city = factor(city, levels = kCity)) %>%
-    arrange(city)
-
-  return(x_output)
-}
-
-# 函数：做带误差棒点图，并显示组间对比结果，目前用于用户分析
-# 参数：
-# x：包含各城市分组平均值、误差值等的数据
-# 漏洞：如何解决图中横轴标签按照城市排序的问题？
-PlotBarError <- function(x, name.grp = "obsr_grp",
-                         name.yaxis = NULL, name.title = NULL) {
-  ggplot(data = x, aes(paste0(city, aov_mark), mean, fill = factor(get(name.grp)))) +
-    geom_bar(stat = "identity", position = position_dodge()) +
-    geom_errorbar(aes(ymin = mean - se, ymax = mean + se, width = 0.2),
-                  position = position_dodge(0.9)) +
-    labs(y = name.yaxis, title = name.title) +
-    theme(axis.title.x = element_blank(),
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
-}
-
-# 函数：做带误差棒的条形图，对比新老用户的表现差异
-# 参数：
-# x：带年份、组别、指标的各城市用户数据
-# name.yr：目标年份
-# user.grp：目标用户组别
-# name.var：目标指标
-# name.yaxis：Y轴标题
-# name.title：图片标题
-PlotCompObsr <- function(x, name.var, name.title, ...) {
-  # 横轴按照城市排序所需因子水平数据
-  x.axis.lab <- MeanSeAov(x, name.var = name.var) %>%
-    select(city, aov_mark) %>%
-    unique()
-
-  MeanSeAov(x, name.var = name.var) %>%
-    PlotBarError(name.title = name.title, ...) +
-    scale_fill_manual(name = "User group", values = c("#FFA500", "#1047A9")) +
-    # 横轴标签按照城市进行排序
-    scale_x_discrete(limits = paste0(x.axis.lab$city, x.axis.lab$aov_mark))
-}
-
-# 函数：从用户数据中筛除目标年份和用户组别，做带误差棒的条形图，对比新冠期间和此前的差别
-# 参数：
-# x：带年份、组别、指标的各城市用户数据
-# name.yr：目标年份
-# user.grp：目标用户组别
-# name.var：目标指标
-# name.yaxis：Y轴标题
-# name.title：图片标题
-PlotCovidYr <- function(x, name.yr = c("2019", "2020", "2021"),
-                        user.grp, name.var, name.yaxis, name.title) {
-  # 横轴按照城市排序所需因子水平数据
-  x.axis.lab <- subset(x, year %in% name.yr & obsr_grp == user.grp) %>%
-    MeanSeAov(., name.grp = "year", name.var = name.var) %>%
-    select(city, aov_mark) %>%
-    unique()
-
-  # 保留目标年老用户数据
-  subset(x, year %in% name.yr & obsr_grp == user.grp) %>%
-    # 计算平均值、误差、显著性等
-    MeanSeAov(., name.grp = "year", name.var = name.var) %>%
-    PlotBarError(name.grp = "year",
-                 name.yaxis = name.yaxis, name.title = name.title) +
-    scale_fill_manual(name = "Year",
-                      values = c("#009999", "#FFCE00", "#FF0000")) +
-    # 横轴标签按照城市进行排序
-    scale_x_discrete(limits = paste0(x.axis.lab$city, x.axis.lab$aov_mark))
-}
+source("src/function.R")
 
 # Read data ----
 ## Constant ----
@@ -398,300 +20,306 @@ PlotCovidYr <- function(x, name.yr = c("2019", "2020", "2021"),
 kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
            "Kobe", "Kawasaki", "Kyoto", "Saitama", "Hiroshima")
 
-## Prefectures and cities ----
-pref.city <- read.xlsx("data_raw/Prefectures_cities.xlsx") %>%
-  tibble() %>%
-  # 保留本研究的目标城市
-  subset(city_en %in% kCity) %>%
-  rename(prefecture = prefecture_en, city = city_en) %>%
-  # 按照城市人口从多到少排序
-  mutate(city = factor(city, levels = kCity))
-
 ## iNaturalist data ----
 ### Raw data ----
-# 读取公民科学各条记录文件并合成一个列表，列表的各元素分别为各个城市的数据
-record.raw <- GetObs(name.dir = "data_raw/iNatData")
+# 文件路径
+inat.file <- list.files("data_raw/iNatData", full.names = TRUE)
 
-### Yearly data ----
-# 各城市各年份观测数等数据
-record.city.yr <- lapply(record.raw, SmryData, dur = "year") %>%
-  CityLs2Df() %>%
-  tibble() %>%
-  # 生成年份缩写列用于作图
-  mutate(yr_sht = year - 2000,
-         city = factor(city, levels = kCity))
+# middle data of raw data
+record.raw <- lapply(inat.file, GetRaw) %>%
+  do.call(rbind, .)
 
-# only keep cities with hihger max user number
-# get the target cities
-tar.city <- record.city.yr %>%
-  group_by(city) %>%
-  summarise(users = max(users)) %>%
+# Identify the "super user" - it should be noted that a "super user" is city- and year-specific, for example, a super user in one city for a certain year might not be a super user in another city.
+super.user <- record.raw %>%
+  # criterion 1: high proportion of contribution
+  group_by(city, year, user_id) %>%
+  summarise(obs = n()) %>%
   ungroup() %>%
-  filter(users > 50) %>%
-  pull(city)
-record.city.yr <- filter(record.city.yr, city %in% tar.city)
-
-### User data ----
-# 构建用户数据：各个城市各个用户各年份各指标的数值
-record.city.obsr.yr <- CityLs2Df(lapply(record.raw, SmryUserData)) %>%
-  mutate(city = factor(city, levels = kCity)) %>%
-  filter(city %in% tar.city)
-# 检测是否有用户跨城市上传数据
-dim(unique(record.city.obsr.yr[c("city", "user", "year")]))
-dim(unique(record.city.obsr.yr[c("user", "year")]))
-# 结论：有1000多名用户跨城市上传数据
+  group_by(city, year) %>%
+  mutate(obs_prop = obs / sum(obs)) %>%
+  ungroup() %>%
+  # criterion 2: extremly higher observation than the others
+  group_by(city, year) %>%
+  mutate(obs_99 = quantile(obs, 0.99)) %>%
+  ungroup() %>%
+  mutate(super_user = case_when(
+    obs_prop > 0.3 | obs > obs_99 ~ TRUE,
+    TRUE ~ FALSE
+  )) %>%
+  select(city, year, user_id, super_user)
 
 # 用户分组：有两种方式，一种是根据用户是第几年参与公民科学来分类，可以分成“第一年参加组”、“第二年参加组”等等，另一种根据2016到2021年间共参与了几年来将观测者区分为新用户和老用户，这种分类方法当然带有点“注定”的意味，也就是说一个老用户，就算他是第一年参加活动，他也是被算成一个“老用户”。此外，因为有些用户跨城市上传观测数据，所以用户分组的时候应该无视城市，比如有个用户第一年年在一个城市上传了数据，次年在另一个城市上传了数据，那么如果按照上述第一种方式来分类，他的“次年”就应该被算作“第二年”，而非“第一年”。下面暂时采用第二种分组方式对用户进行分组。
 
 # 构造用户数据，计算用户2016到2021年间有上传观测数据的年数
-user.grp <- record.city.obsr.yr %>%
-  select(user, year) %>%
-  unique() %>%
+user.grp <- record.raw %>%
+  select(user_id, year) %>%
+  distinct() %>%
   # 计算用户总共上传了几年数据
-  group_by(user) %>%
+  group_by(user_id) %>%
   summarise(n_yr = n()) %>%
-  ungroup()
-table(user.grp$n_yr)
-# 结论：绝大部分用户都是只活跃一年的新用户
-
-# 将用户分组数据加入年度观测数据中
-record.city.obsr.yr <- record.city.obsr.yr %>%
-  left_join(user.grp, by = "user") %>%
+  ungroup() %>%
   # 观测总年数大于等于2年都划为老用户
   mutate(obsr_grp = case_when(n_yr <= 1 ~ "short", TRUE ~ "long"))
+table(user.grp$n_yr)
+# 结论：绝大部分用户都是只活跃一年的短期用户
+
+# target city: cities with max year user > 50
+tar.city <- record.raw %>%
+  group_by(city, year) %>%
+  summarise(user_pop = length(unique(user_id))) %>%
+  ungroup() %>%
+  group_by(city) %>%
+  summarise(max_user_pop = max(user_pop)) %>%
+  ungroup() %>%
+  filter(max_user_pop > 50) %>%
+  mutate(city = factor(city, levels = kCity))
+
+# remove super users and non-target cities
+record.raw <- record.raw %>%
+  filter(city %in% tar.city$city) %>%
+  left_join(super.user, c("city", "user_id", "year")) %>%
+  filter(!super_user) %>%
+  select(city, id, user_id, obs_date, year)
+
+### Yearly user data ----
+# data of each city-year-user
+record.user.yr <- record.raw %>%
+  group_by(city, year, user_id) %>%
+  summarise(
+    obs = n(),
+    act_day = length(unique(obs_date)),
+    obs_per_day = obs / act_day
+  ) %>%
+  ungroup() %>%
+  left_join(user.grp, by = "user_id") %>%
+  # 生成年份缩写列用于作图
+  mutate(yr_short = as.factor(as.numeric(as.character(year)) - 2000))
+
+### Yearly data ----
+# data of each city-year
+record.yr <- record.user.yr %>%
+  group_by(city, yr_short) %>%
+  summarise(
+    obs = sum(obs),
+    user_pop = n(),
+    prop_long_user = sum(obsr_grp == "long") / user_pop,
+    obs_per_user = obs / user_pop
+  ) %>%
+  ungroup()
 
 # Analysis ----
-## Annual comparison ----
-# 作图：各城市各指标历年变化
-png(filename = "data_proc/分指标和城市各年份指标值变化.png", res = 300,
-    width = 3500, height = 2000)
-(SerPlot(
-  record.city.yr,
-  var_ls =
-    c(
-      "obs",
-      "users",
-      "obs_per_user",
-      "obs_pu_pd"
-    ),
-  plotname =
-    c(
-      "(a) Number of observations",
-      "(b) Number of active users",
-      "(c) Number of observations per active user",
-      "(d) Number of observations per active user per active day"
-    ),
-  dur = "year"
-) %>%
-    Reduce("/", x = .) +
-    plot_layout(guides = "collect") & theme(legend.position = "bottom"))
-dev.off()
+## Observation change ----
+record.yr %>%
+  select(city, yr_short, obs) %>%
+  group_by(city) %>%
+  mutate(obs_scale = obs / max(obs)) %>%
+  ggplot() +
+  geom_line(aes(as.numeric(as.character(yr_short)), obs_scale, col = city))
 
-# 作图：各年份各指标相比前一年的变化
-png(filename = "data_proc/各指标年份两两间比较.png", res = 300,
-    width = 2000, height = 4500)
-(
-  CompTwoYr(record.city.yr, yr.base = 2016, yr.tar = 2017) /
-    CompTwoYr(record.city.yr, yr.base = 2017, yr.tar = 2018) /
-    CompTwoYr(record.city.yr, yr.base = 2018, yr.tar = 2019) /
-    CompTwoYr(record.city.yr, yr.base = 2019, yr.tar = 2020) /
-    CompTwoYr(record.city.yr, yr.base = 2020, yr.tar = 2021)
-)
-dev.off()
-# 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
-
-# 室内参与和室外参与的关系
-# 作图：检测观测条数和鉴定条数的关系
-plot(log(record.city.yr$obs), log(record.city.yr$idpa))
-# 分城市来看
-ggplot(record.city.yr) +
-  geom_point(aes(obs, idpa, color = factor(year))) +
-  facet_wrap(.~ city, scales = "free")
-# 结论：两者几乎就是线性相关的，可以推测鉴定条数增加主要由观测条数驱动，一定程度上，和“室外活动减少，室内活动增加”的结论形成对比。当然不排除一种可能性，即说不定室内活动减少得幅度较低，而室外活动受到影响更大，减少得较多。这种可能性也可以检测，但因为这些变化受多种因素影响，就算检测了，结果也未必可靠，因此暂时不检测。
-
-## User group analysis ----
+## User group ----
 ### Metrics ~ user grps ----
 # 对比新老用户，看老用户在各项指标上是否都高于新用户
-png(filename = "data_proc/分指标各城市跨用户组对比条形图.png", res = 300,
+png(filename = "data_proc/User_behavior_comparison.png", res = 300,
     width = 2000, height = 1000)
-PlotCompObsr(record.city.obsr.yr, name.var = "obs",
-             name.yaxis = "Observation", name.title = "(a)") +
-  PlotCompObsr(record.city.obsr.yr, name.var = "act_days",
-               name.yaxis = "Active day", name.title = "(b)") +
-  PlotCompObsr(record.city.obsr.yr, name.var = "obs_pd",
-               name.yaxis = "Daily observation", name.title = "(c)") +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-dev.off()
-# 盒形图也可以作为参考
-png(filename = "data_proc/分指标各城市跨用户组对比盒形图.png", res = 300,
-    width = 2000, height = 3500)
-(ggplot(record.city.obsr.yr) +
-  geom_boxplot(aes(city, obs, color = obsr_grp))) /
-  (ggplot(record.city.obsr.yr) +
-  geom_boxplot(aes(city, act_days, color = obsr_grp))) /
-  (ggplot(record.city.obsr.yr) +
-  geom_boxplot(aes(city, obs_pd, color = obsr_grp))) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+(
+  PlotCompObsr(record.user.yr, name.var = "obs",
+               name.yaxis = "Observation", name.title = "(a)") +
+    PlotCompObsr(record.user.yr, name.var = "act_day",
+                 name.yaxis = "Active day", name.title = "(b)") +
+    PlotCompObsr(record.user.yr, name.var = "obs_per_day",
+                 name.yaxis = "Daily observation", name.title = "(c)") +
+    plot_layout(guides = "collect") & theme(legend.position = "bottom")
+)
 dev.off()
 # 结论：老用户观测数通常显著高于新用户，其原因主要是老用户观测天数较多。如果看观测强度，即每观测天观测条数的话，尽管大多数不显著，但是新用户往往甚至高于老用户。可见持之以恒，少量多次才是老用户成功超越新用户的关键。并且注意，这里的“观测天数较多”是指年内观测天数多，而不是因为老用户活动年数多导致的研究时长内总的观测天数多。
 
 ### Metrics ~ years ----
 # 分用户组各指标不同年份对比
-png(filename = "data_proc/分用户组和指标各城市跨年份对比条形图.png", res = 300,
-    width = 2000, height =1800)
-((PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs",
+((PlotCovidYr(record.user.yr, user.grp = "long", name.var = "obs",
               name.yaxis = "Observation", name.title = "(a)") /
-    PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs",
+    PlotCovidYr(record.user.yr, user.grp = "short", name.var = "obs",
                 name.yaxis = "Observation", name.title = "(d)")) |
-   (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "act_days",
+   (PlotCovidYr(record.user.yr, user.grp = "long", name.var = "act_day",
                 name.yaxis = "Active day", name.title = "(b)") /
-      PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "act_days",
+      PlotCovidYr(record.user.yr, user.grp = "short", name.var = "act_day",
                   name.yaxis = "Active day", name.title = "(e)")) |
-   (PlotCovidYr(record.city.obsr.yr, user.grp = "long", name.var = "obs_pd",
+   (PlotCovidYr(record.user.yr, user.grp = "long", name.var = "obs_per_day",
                 name.yaxis = "Daily observation", name.title = "(c)") /
-      PlotCovidYr(record.city.obsr.yr, user.grp = "short", name.var = "obs_pd",
+      PlotCovidYr(record.user.yr, user.grp = "short", name.var = "obs_per_day",
                   name.yaxis = "Daily observation", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
+# 结论：新冠对长短期用户的影响不同
+
+## Factor mean value change ----
+png(filename = "data_proc/Index_change_for_each_city_1.png", res = 300,
+    width = 3500, height = 2000)
+(
+  record.yr %>%
+    select(city, yr_short, user_pop, prop_long_user, obs_per_user) %>%
+    pivot_longer(cols = c(user_pop, prop_long_user, obs_per_user),
+                 names_to = "index", values_to = "index_val") %>%
+    mutate(
+      index = factor(
+        index, levels = c("user_pop", "prop_long_user", "obs_per_user"))
+    ) %>%
+    ggplot() +
+    geom_line(
+      aes(as.numeric(as.character(yr_short)), index_val)
+    ) +
+    facet_grid2(vars(index), vars(city), scales = "free", independent = "y")
+)
 dev.off()
 
+png(filename = "data_proc/Index_change_for_each_city_2.png", res = 300,
+    width = 3500, height = 2000)
+(
+  record.yr %>%
+    select(city, yr_short, user_pop, prop_long_user, obs_per_user) %>%
+    pivot_longer(cols = c(user_pop, prop_long_user, obs_per_user),
+                 names_to = "index", values_to = "index_val") %>%
+    group_by(city, index) %>%
+    mutate(
+      index_val_scale =
+        (index_val - min(index_val)) / (max(index_val) - min(index_val))
+    ) %>%
+    ggplot() +
+    geom_line(
+      aes(as.numeric(as.character(yr_short)), index_val_scale, col = city)
+    ) +
+    facet_wrap(.~ index, scales = "free")
+)
+dev.off()
+
+# 作图：各年份各指标相比前一年的变化
+CompTwoYr(record.yr, yr.base = 16, yr.tar = 17) /
+  CompTwoYr(record.yr, yr.base = 17, yr.tar = 18) /
+  CompTwoYr(record.yr, yr.base = 18, yr.tar = 19) /
+  CompTwoYr(record.yr, yr.base = 19, yr.tar = 20) /
+  CompTwoYr(record.yr, yr.base = 20, yr.tar = 21)
+# 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
+
 ### LMDI ----
-LMDI <- function() {
-  lmdi.basic <-
-    # get Oi (obs number of i group) and Pi (population of i group) first
-    record.city.obsr.yr %>%
-    group_by(obsr_grp, city, year) %>%
-    summarise(Oi = sum(obs),
-              Pi = n()) %>%
-    ungroup()
-  # 通过检测，发现Saitama2017年只有“long”用户，而Hiroshima2016只有“short”用户
-  # table(lmdi.basic$city, lmdi.basic$year)
-  # table(subset(lmdi.basic, city = "Saitam" & year == 2017)$obsr_grp)
-  # table(subset(lmdi.basic, city == "Hiroshima" & year == 2016)$obsr_grp)
-  # 因此补全这两行数据
-  lmdi.basic <- lmdi.basic %>%
-    arrange(obsr_grp, city, year)
-  # get total population column for both long- and short-term group
-  lmdi.basic <- lmdi.basic %>%
-    left_join(
-      lmdi.basic %>%
-        group_by(city, year) %>%
-        summarise(P = sum(Pi)) %>%
-        ungroup(),
-      by = c("city", "year")
-    ) %>%
-    # other basic data
-    mutate(
-      # get Si (structure effect of i group)
-      Si = Pi / P,
-      # get Ii (intensity effect of i group)
-      Ii = Oi / Pi
-    )
+lmdi <- record.user.yr %>%
+  group_by(city, year, obsr_grp) %>%
+  summarise(o_i = sum(obs), p_i = n()) %>%
+  arrange(city, year, obsr_grp)
+# check data
+table(lmdi$city, lmdi$year, lmdi$obsr_grp)
 
-  # get middle data
-  lmdi.mid1.t <-
-    lmdi.basic %>%
-    subset(year != 2016) %>%
-    arrange(obsr_grp, city, year)
-  names(lmdi.mid1.t) <- paste0(names(lmdi.mid1.t), "t")
-  lmdi.mid1.0 <-
-    lmdi.basic %>%
-    subset(year != 2021) %>%
-    arrange(obsr_grp, city, year)
-  names(lmdi.mid1.0) <- paste0(names(lmdi.mid1.0), "0")
+lmdi <- inner_join(
+  lmdi %>%
+    rename(year_0 = year, o_i0 = o_i, p_i0 = p_i) %>%
+    mutate(year_t = as.factor(as.numeric(as.character(year_0)) + 1)),
+  lmdi %>%
+    rename(year_t = year, o_it = o_i, p_it = p_i),
+  by = c("city", "year_t", "obsr_grp")
+) %>%
+  select(city, year_0, year_t, obsr_grp, o_i0, o_it, p_i0, p_it) %>%
+  filter(!(city == "Kawasaki" & (year_0 == "2017" | year_t == "2017"))) %>%
+  filter(!(city == "Nagoya" & (year_0 == "2016" | year_t == "2016"))) %>%
+  group_by(city, year_0) %>%
+  mutate(p_0 = sum(p_i0)) %>%
+  ungroup() %>%
+  group_by(city, year_t) %>%
+  mutate(p_t = sum(p_it)) %>%
+  ungroup()
 
-  lmdi.mid2 <-
-    cbind(lmdi.mid1.t, lmdi.mid1.0) %>%
-    tibble() %>%
-    mutate(
-      Oit_Oi0 = Oit - Oi0,
-      ln_Oit_Oi0 = log(Oit / Oi0),
-      ln_Pt_P0 = log(Pt / P0),
-      ln_Sit_Si0 = log(Sit / Si0),
-      ln_Iit_Ii0 = log(Iit / Ii0)
-    ) %>%
-    # 进行累加
-    group_by(cityt, yeart) %>%
-    summarise(
-      # 总效应和效应分解
-      delt_O = sum(Oit_Oi0),
-      delt_P = sum(Oit_Oi0 / ln_Oit_Oi0 * ln_Pt_P0),
-      delt_S = sum(Oit_Oi0 / ln_Oit_Oi0 * ln_Sit_Si0),
-      delt_I = sum(Oit_Oi0 / ln_Oit_Oi0 * ln_Iit_Ii0)
-    ) %>%
-    ungroup()
-  # bug: 0如何处理呢？
+# manual check: row number should be 80
+nrow(lmdi)
 
-  lmdi.mid3 <- left_join(
-    lmdi.mid2 %>%
-      select(cityt, yeart, delt_P, delt_S, delt_I) %>%
-      pivot_longer(cols = starts_with("delt"),
-                   names_to = "delt_sep", values_to = "delt_val"),
-    lmdi.mid2 %>%
-      select(cityt, yeart, delt_O),
-    by = c("cityt", "yeart")
+# calculate
+lmdi <- lmdi %>%
+  mutate(
+    s_i0 = p_i0 / p_0,
+    s_it = p_it / p_t,
+    i_i0 = o_i0 / p_i0,
+    i_it = o_it / p_it
   ) %>%
-    # 判断结果符号
-    mutate(pos_neg = case_when(
-      delt_val < 0 ~ -1,
-      delt_val > 0 ~ 1
-    )) %>%
-    group_by(cityt, yeart) %>%
-    # mutate(new = max(abs(delt_val)))
-    mutate(delt_val_scale = abs(delt_val) / max(abs(delt_val)) * pos_neg)
-  # bug: 如何标准化比较合适？本考虑将各分效应的值都除以总效应，同时保留该标准化值的正负号，但是有些年份的总效应太小，而分效应值太大，结果导致标准化值过大，可视化效果较差。
-
-  return(lmdi.mid3)
-}
-lmdi <- LMDI() %>%
-  mutate(delt_sep = case_when(
-    delt_sep == "delt_P" ~ "Population\n Effect",
-    delt_sep == "delt_S" ~ "Structure\n Effect",
-    delt_sep == "delt_I" ~ "Intensity\n Effect"
-  )) %>%
-  mutate(delt_sep = factor(
-    delt_sep,
-    levels =
-      c("Population\n Effect", "Structure\n Effect", "Intensity\n Effect")
-  ))
+  mutate(
+    delt_p_i = (o_it - o_i0) / log(o_it / o_i0) * log(p_t / p_0),
+    delt_s_i = (o_it - o_i0) / log(o_it / o_i0) * log(s_it / s_i0),
+    delt_i_i = (o_it - o_i0) / log(o_it / o_i0) * log(i_it / i_i0)
+  ) %>%
+  group_by(city, year_t, year_0) %>%
+  summarise(
+    o_0 = sum(o_i0),
+    o_t = sum(o_it),
+    delt_p = sum(delt_p_i),
+    delt_s = sum(delt_s_i),
+    delt_i = sum(delt_i_i)
+  ) %>%
+  ungroup() %>%
+  mutate(delt_o = o_t - o_0)
 
 # visualization
 # original plot
 png(filename = "data_proc/LMDI_effect_1.png", res = 300,
     width = 1800, height = 2200)
-(ggplot(lmdi) +
-  geom_col(aes(yeart, delt_val_scale, fill = as.character(pos_neg))) +
-  theme_bw() +
-  facet_grid(cityt ~ delt_sep) +
-  scale_fill_manual(
-    name = "Effect Direction",
-    limits = c("1", "-1"),
-    values = c("darkgreen", "darkred"),
-    labels = c("Positive", "Negative")
-  ) +
-  theme(legend.position = "bottom") +
-  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
-  labs(x = "", y = "Scaled Effect"))
+(lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(pos_neg = case_when(
+      delt_val_scale > 0 ~ 1,
+      TRUE ~ -1
+    )) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_i"))) %>%
+    ggplot() +
+    geom_col(aes(year_t, delt_val_scale, fill = as.character(pos_neg))) +
+    theme_bw() +
+    facet_grid(city ~ delt) +
+    scale_fill_manual(
+      name = "Effect Direction",
+      limits = c("1", "-1"),
+      values = c("darkgreen", "darkred"),
+      labels = c("Positive", "Negative")
+    ) +
+    theme(legend.position = "bottom") +
+    scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
+    labs(x = "", y = "Scaled Effect"))
 dev.off()
 
 # line plot
 png(filename = "data_proc/LMDI_effect_2.png", res = 300,
     width = 2000, height = 1500)
-(ggplot(lmdi) +
-    geom_line(aes(yeart, delt_val_scale, group = cityt, col = cityt)) +
+(lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_i"))) %>%
+    ggplot() +
+    geom_line(aes(year_t, delt_val_scale, group = city, col = city)) +
     theme_bw() +
-    facet_wrap(.~ delt_sep))
+    facet_wrap(.~ delt))
 dev.off()
 
 # tile plot
 png(filename = "data_proc/LMDI_effect_3.png", res = 300,
     width = 2400, height = 1500)
-(ggplot(lmdi, aes(x = yeart, y = ordered(cityt, levels = rev(levels(cityt))))) +
+(lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_i"))) %>%
+    ggplot(aes(year_t, city)) +
     geom_tile(aes(fill = delt_val_scale)) +
-    theme_bw() +
+    # theme_bw() +
     scale_fill_gradient2(
       name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
     ) +
     geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
-    facet_wrap(.~ delt_sep) +
+    facet_wrap(.~ delt) +
     labs(x = "", y = "City"))
 dev.off()
