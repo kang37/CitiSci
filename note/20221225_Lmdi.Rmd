@@ -1,0 +1,71 @@
+---
+title: "Report on LMDI"
+author: "Jiefeng Kang"
+date: "2022-12-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## 目标
+
+对各个城市各年份之间的观测数变化量进行归因。
+
+## 方法和结果
+
+创新性迁移能源和碳排放领域常用的LDMI分解法，将观测数变化分解成可加的几个效应：用户数效应（Population effect）、结构效应（Structure effect）、观测强度效应（Intensity effect）。
+关于这个方法，你之前应该已经看过部分文献了。从写作角度来说，因为这次主要是迁移应用别的领域的方法，所以更重要的是了解这个方法能够做什么。总之，通过该方法分解出来的最初的结果如下表。
+
+```{r}
+rbind(
+  lmdi %>% 
+    select(cityt, yeart, delt_sep, delt_val) %>% 
+    rename(city = cityt, year = yeart, delt = delt_sep), 
+  lmdi %>% 
+    select(cityt, yeart, delt_O) %>% 
+    mutate(delt = "delt_O") %>% 
+    rename(city = cityt, year = yeart, delt_val = delt_O) %>% 
+    unique()
+) %>% 
+  pivot_wider(names_from = delt, values_from = delt_val) %>% 
+  knitr::kable()
+```
+
+这个表的第3-5列就是上面提及的几个效应，最后一列的“delt_0”是总效应。
+怎么看这个表呢？举个例子-东京2017年的值这一行：delt_0 = 269，意味着2017年的观测数比2016年增加了269条，那么这269条主要是什么原因导致的呢？就看各个分解效应，可见其中由于用户数增加（population effect）导致的增长是265.97条，由于观测强度（intensity effect）增加导致的增长是16.65条，但是由于用户结构变化（structure effect）导致了13.62条的下降（这里的变化应该是指长期用户比例减少，而短期用户比例增加），这三个效应的总和（265.97 + 16.65 - 13.62）就等于总变化量（delt_0 = 269）。
+
+但是上次说过，如果直接用这个数据作图的话，有些变化很难看清楚。比如说东京后面几年的变化量和分解效应很大，相比之下，前面几年的变化量和分解效应量都很小，放在同一张图中的话，前面几年的就看不清了。因此我将每个分解效应量除以该城市该年份分解效应的绝对值最大值，并保留原本的正负符号，进行可视化。比如说，还是刚才的东京2017年的值这一行，population effect是265.97，intensity effect是16.65，structure effect是-13.62，绝对值分别为265.97、16.65和13.62，那么绝对值最大值就是265.97；之后将各个原始数值除以这个绝对值最大值，则标准化后的效应值就是，population effect = 1，intensity effect = 0.06，structure effect要保留原始数值的符号，为-0.05。标准化后的效应量为：
+
+```{r}
+lmdi %>% 
+  rename(city = cityt, year = yeart) %>% 
+  select(city, year, delt_sep, delt_val_scale) %>% 
+  pivot_wider(names_from = delt_sep, values_from = delt_val_scale) %>% 
+  knitr::kable()
+```
+
+基于这个数值做图：
+
+```{r fig.height=15}
+ggplot(lmdi) +
+  geom_col(aes(yeart, delt_val_scale, fill = as.character(pos_neg))) +
+  theme_bw() +
+  facet_grid(cityt ~ delt_sep) +
+  scale_fill_manual(
+    name = "Effect Direction",
+    limits = c("1", "-1"),
+    values = c("darkgreen", "darkred"),
+    labels = c("Positive", "Negative")
+  ) +
+  scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
+  theme(legend.position = "bottom") + 
+  labs(x = "", y = "Scaled Effect")
+```
+
+## 关于写作
+
+师姐写作经验很丰富，我就不赘述啦，总之就是结合原稿和之前发的一系列报告进行写作。如果对LMDI分解的结果写法有疑问的话，可以参考LMDI相关的文献，类比一下：咱们这里的观测量就想是LMDI能源分解中的能源总量，他们往往将能源变化归因于产业GDP变化、产业结构变化、行业能耗强度变化，正如我们这里将观测量变化归因于用户数、用户结构、用户观测强度一样。
+
+另外是要强调一下方法迁移应用这一点。本文从内容上看，创新点主要是对公民科学分析做了用户分组和多指标分析（其他研究一般都是简单分析观测数变化，或者多加几个指标，且不区分用户）；从方法上说，主要就是迁移应用了LDMI方法，进行了可加性因素分解。

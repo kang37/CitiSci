@@ -1,0 +1,85 @@
+---
+title: "Re-struct analysis and writing"
+author: "Jiefeng Kang"
+date: "2023-04-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I re-structed the artcile structure after careful consideration. **The core question of this paper is: what drive the change of citizen science during COVID-19?** To be specific, what drive the change of observation number? There can be many answers: the change of user number, change of observation activity intensity, change of user structure... and that is why we use the LMDI to decomposite the contribution of each factor. 
+
+So, firstly, we can give a figure of the key index of our coure question: the change of total observation in each city. Since the total observation varies a lot in different cities, I scaled all the values with the max yearly values of each city. 
+
+```{r}
+record.yr %>%
+  select(city, yr_short, obs) %>%
+  group_by(city) %>%
+  mutate(obs_scale = obs / max(obs)) %>%
+  ggplot() +
+  geom_line(aes(as.numeric(as.character(yr_short)), obs_scale, col = city))
+```
+
+We can see that it is not always decreasing: only 4 cities decrease after 2019, 2 decrease after 2020, while the other 2 cities just keep going up. 
+
+For the second step, since we will focus on the contribution of user population, user structure, and activity intensity to this change (of observation), we need to categorize the users into different groups first, then show the change of this factors on average. 
+
+As the previous manuscript, the users are categorized into long-term users and short-term users. Using this figure, we show the characters of the two groups. 
+
+```{r}
+PlotCompObsr(record.user.yr, name.var = "obs",
+               name.yaxis = "Observation", name.title = "(a)") +
+    PlotCompObsr(record.user.yr, name.var = "act_day",
+                 name.yaxis = "Active day", name.title = "(b)") +
+    PlotCompObsr(record.user.yr, name.var = "obs_per_day",
+                 name.yaxis = "Daily observation", name.title = "(c)") +
+    plot_layout(guides = "collect") & theme(legend.position = "bottom")
+```
+
+The long-term users differ from short-temr users that they usually have higher observation due to higher active days in one year. Besides, in the previous manuscript, we had a figure showing the different impact of COVID-19 to each group; since it is not very relevant to our core question, and as Kubo-san said, there is too much information, I think it is better to remove the figure (original Figure 3). 
+
+Since we have categorized the users into the 2 groups, we can calculate the proportion of long-term users for each city in each year - and that is one of the driving factors, "user structure". Based on the current data, the other two driving factors, "user population", "activity frequency (per user active days)", and "observation intensity (per day observation)" are also calculated. **It is chos, so I suggest we use another kind of figures**; I made some alternative ones. And **don't worry about that because** that is also why we need LMDI - the reason can be chaos from this perspective, but with some method, we can find the hiden pattern. 
+
+```{r}
+record.yr %>%
+    select(city, yr_short, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+    pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
+                 names_to = "index", values_to = "index_val") %>%
+    group_by(city, index) %>%
+    mutate(
+      index_val_scale =
+        (index_val - min(index_val)) / (max(index_val) - min(index_val))
+    ) %>%
+    ggplot() +
+    geom_line(
+      aes(as.numeric(as.character(yr_short)), index_val_scale, col = city)
+    ) +
+    facet_wrap(.~ index, scales = "free",nrow = 1)
+```
+
+Then LMDI is used to figure out the contribution of each factor. Again, since the change varies in different cities, I scaled the contribution of each factor based on the max absolute value of each city-year (LMDI is a little difficult to understand, mainly because it is not a statistic analysi, so I will write a detailed explanation later). As for the visualization of the LMDI results, I tend to use this (we can discuss about that later; I made several alternatives): 
+
+```{r fig.width=15}
+lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
+    ggplot(aes(year_t, city)) +
+    geom_tile(aes(fill = delt_val_scale)) +
+    # theme_bw() +
+    scale_fill_gradient2(
+      name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
+    ) +
+    geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
+    facet_wrap(.~ delt, nrow = 1) +
+    labs(x = "", y = "City")
+```
+
+From the figure, we can see that population change and intensity change contribute more the change of totoal observation (the grids with darker color). And a great thing is that, there is an obvious pattern before and after COVID-19. 

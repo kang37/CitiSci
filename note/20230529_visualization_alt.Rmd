@@ -1,0 +1,212 @@
+---
+title: "Visualization alternatives"
+output: html_document
+date: "2023-05-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introduction
+
+In the original manuscript, we discussed the visualization. Here I provide some alternatives for the figures. Conclusion first: since the heterogeneity of the raw data is very high, maybe panel is still the best way, but I can add some auxiliary lines to the figure, so that readers can identify the key time point of the sub-figures. 
+
+## Change of annual indexes
+
+Raw data in same figure, one color for one city: 
+
+```{r}
+# idx raw
+record.yr %>% 
+  pivot_longer(
+    cols = c(obs, user_pop, prop_long_user,day_per_user, obs_per_day), 
+    names_to = "idx", 
+    values_to = "idx_val"
+  ) %>% 
+  mutate(idx = case_when(
+    idx == "obs" ~ "Observation", 
+    idx == "user_pop" ~ "Population", 
+    idx == "prop_long_user" ~ "Structure", 
+    idx == "day_per_user" ~ "Frequency", 
+    idx == "obs_per_day" ~ "Intensity"
+  )) %>% 
+  mutate(idx = factor(
+    idx, levels = c("Observation", "Population", "Structure", "Frequency", "Intensity")
+  )) %>% 
+  ggplot() + 
+  geom_line(aes(yr_abbr, idx_val, group = city, col = city)) + 
+  facet_wrap(.~ idx, scales = "free")
+```
+
+Since the data of Tokyo is much higher than that of the other cities, we can't see the details of the other cities. Therefore, I scale the data by transfor the max value of a city into 1. 
+Scaled data in same figure, one color for one city: 
+
+```{r cars}
+# idx std
+record.yr %>% 
+  pivot_longer(
+    cols = c(obs, user_pop, prop_long_user,day_per_user, obs_per_day), 
+    names_to = "idx", 
+    values_to = "idx_val"
+  ) %>% 
+  group_by(city, idx) %>%
+  mutate(idx_val_scale = idx_val / max(idx_val)) %>%
+  mutate(idx = case_when(
+    idx == "obs" ~ "Observation", 
+    idx == "user_pop" ~ "Population", 
+    idx == "prop_long_user" ~ "Structure", 
+    idx == "day_per_user" ~ "Frequency", 
+    idx == "obs_per_day" ~ "Intensity"
+  )) %>% 
+  mutate(idx = factor(
+    idx, levels = c("Observation", "Population", "Structure", "Frequency", "Intensity")
+  )) %>% 
+  ggplot() + 
+  geom_line(aes(yr_abbr, idx_val_scale, group = city, col = city)) + 
+  facet_wrap(.~ idx, scales = "free")
+```
+
+Still, it is chaos ... so I think the original one (panle figure) is the best one. 
+
+```{r fig.width=10}
+# panel
+record.yr %>%
+  select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+  pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
+               names_to = "idx", values_to = "idx_val") %>%
+  mutate(idx = case_when(
+    idx == "obs" ~ "Observation", 
+    idx == "user_pop" ~ "Population", 
+    idx == "prop_long_user" ~ "Structure", 
+    idx == "day_per_user" ~ "Frequency", 
+    idx == "obs_per_day" ~ "Intensity"
+  )) %>% 
+  mutate(idx = factor(
+    idx, levels = c("Observation", "Population", "Structure", "Frequency", "Intensity")
+  )) %>% 
+  ggplot() +
+  geom_line(
+    aes(as.numeric(as.character(yr_abbr)), idx_val)
+  ) + 
+  facet_grid2(vars(idx), vars(city), scales = "free", independent = "y")
+```
+
+The problem of the panel figure is that it is difficult to identify if the cities change in a same way, for instance, if they all decrease since 2019. Therefore, I added a auxiliary line (showing year 2019) to each figure. 
+
+```{r fig.width=10}
+record.yr %>%
+  select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+  pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
+               names_to = "idx", values_to = "idx_val") %>%
+  mutate(idx = case_when(
+    idx == "obs" ~ "Observation", 
+    idx == "user_pop" ~ "Population", 
+    idx == "prop_long_user" ~ "Structure", 
+    idx == "day_per_user" ~ "Frequency", 
+    idx == "obs_per_day" ~ "Intensity"
+  )) %>% 
+  mutate(idx = factor(
+    idx, levels = c("Observation", "Population", "Structure", "Frequency", "Intensity")
+  )) %>% 
+  ggplot() +
+  geom_line(
+    aes(as.numeric(as.character(yr_abbr)), idx_val)
+  ) +
+  geom_vline(xintercept = 19, col = "red", alpha = 0.5) + 
+  facet_grid2(vars(idx), vars(city), scales = "free", independent = "y")
+```
+
+## LMDI result
+
+For LMDI result, I also provide some alternatives. 
+
+The original one: 
+
+```{r}
+lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(pos_neg = case_when(
+      delt_val_scale > 0 ~ 1,
+      TRUE ~ -1
+    )) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
+    ggplot() +
+    geom_col(aes(year_t, delt_val_scale, fill = as.character(pos_neg))) +
+    theme_bw() +
+    facet_grid(city ~ delt) +
+    scale_fill_manual(
+      name = "Effect Direction",
+      limits = c("1", "-1"),
+      values = c("darkgreen", "darkred"),
+      labels = c("Positive", "Negative")
+    ) +
+    theme(legend.position = "bottom") +
+    scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
+    labs(x = "", y = "Scaled Effect")
+```
+
+The line plot, which is usually applied in LMDI studies. We can do that either by effect: 
+
+```{r}
+lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
+    ggplot() +
+    geom_line(aes(year_t, delt_val_scale, group = city, col = city)) +
+    theme_bw() +
+    facet_wrap(.~ delt)
+```
+
+Or by cities: 
+
+```{r}
+lmdi %>%
+  select(-o_0, -o_t, -delt_o) %>%
+  pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
+               names_to = "delt", values_to = "delt_val") %>%
+  group_by(city, year_t, year_0) %>%
+  mutate(delt_abs_max = max(abs(delt_val))) %>%
+  ungroup() %>%
+  mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+  mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
+  ggplot() +
+  geom_line(aes(year_t, delt_val_scale, group = delt, col = delt)) +
+  theme_bw() +
+  facet_wrap(.~ city)
+```
+
+I think the best one is using tile plot: 
+
+```{r fig.width=10}
+lmdi %>%
+    select(-o_0, -o_t, -delt_o) %>%
+    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
+                 names_to = "delt", values_to = "delt_val") %>%
+    group_by(city, year_t, year_0) %>%
+    mutate(delt_abs_max = max(abs(delt_val))) %>%
+    ungroup() %>%
+    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
+    ggplot(aes(year_t, city)) +
+    geom_tile(aes(fill = delt_val_scale)) +
+    # theme_bw() +
+    scale_fill_gradient2(
+      name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
+    ) +
+    geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
+    facet_wrap(.~ delt, nrow = 1) +
+    labs(x = "", y = "City")
+```
