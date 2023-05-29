@@ -93,12 +93,12 @@ record.user.yr <- record.raw %>%
   ungroup() %>%
   left_join(user.grp, by = "user_id") %>%
   # 生成年份缩写列用于作图
-  mutate(yr_short = as.factor(as.numeric(as.character(year)) - 2000))
+  mutate(yr_abbr = as.factor(as.numeric(as.character(year)) - 2000))
 
 ### Yearly data ----
 # data of each city-year
 record.yr <- record.user.yr %>%
-  group_by(city, yr_short) %>%
+  group_by(city, yr_abbr) %>%
   summarise(
     obs = sum(obs),
     user_pop = n(),
@@ -114,11 +114,11 @@ record.yr <- record.user.yr %>%
 # Analysis ----
 ## Observation change ----
 record.yr %>%
-  select(city, yr_short, obs) %>%
+  select(city, yr_abbr, obs) %>%
   group_by(city) %>%
   mutate(obs_scale = obs / max(obs)) %>%
   ggplot() +
-  geom_line(aes(as.numeric(as.character(yr_short)), obs_scale, col = city))
+  geom_line(aes(as.numeric(as.character(yr_abbr)), obs_scale, col = city))
 
 ## User group ----
 ### Metrics ~ user grps ----
@@ -159,7 +159,7 @@ png(filename = "data_proc/Index_change_for_each_city_1.png", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
-    select(city, yr_short, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+    select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
     pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
                  names_to = "index", values_to = "index_val") %>%
     mutate(
@@ -168,7 +168,7 @@ png(filename = "data_proc/Index_change_for_each_city_1.png", res = 300,
     ) %>%
     ggplot() +
     geom_line(
-      aes(as.numeric(as.character(yr_short)), index_val)
+      aes(as.numeric(as.character(yr_abbr)), index_val)
     ) +
     facet_grid2(vars(index), vars(city), scales = "free", independent = "y")
 )
@@ -178,7 +178,7 @@ png(filename = "data_proc/Index_change_for_each_city_2.png", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
-    select(city, yr_short, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+    select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
     pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
                  names_to = "index", values_to = "index_val") %>%
     group_by(city, index) %>%
@@ -188,7 +188,7 @@ png(filename = "data_proc/Index_change_for_each_city_2.png", res = 300,
     ) %>%
     ggplot() +
     geom_line(
-      aes(as.numeric(as.character(yr_short)), index_val_scale, col = city)
+      aes(as.numeric(as.character(yr_abbr)), index_val_scale, col = city)
     ) +
     facet_wrap(.~ index, scales = "free", nrow = 1)
 )
