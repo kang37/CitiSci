@@ -265,11 +265,11 @@ lmdi <- lmdi %>%
   ungroup() %>%
   mutate(delt_o = o_t - o_0)
 
-# visualization
-# original plot
-png(filename = "data_proc/LMDI_effect_1.png", res = 300,
-    width = 1800, height = 2200)
-(lmdi %>%
+# visualization by tile plot
+png(filename = "data_proc/LMDI_effect.png", res = 300,
+    width = 3000, height = 2000)
+(
+  lmdi %>%
     select(-o_0, -o_t, -delt_o) %>%
     pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
                  names_to = "delt", values_to = "delt_val") %>%
@@ -277,63 +277,35 @@ png(filename = "data_proc/LMDI_effect_1.png", res = 300,
     mutate(delt_abs_max = max(abs(delt_val))) %>%
     ungroup() %>%
     mutate(delt_val_scale = delt_val / delt_abs_max) %>%
-    mutate(pos_neg = case_when(
-      delt_val_scale > 0 ~ 1,
-      TRUE ~ -1
-    )) %>%
-    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
-    ggplot() +
-    geom_col(aes(year_t, delt_val_scale, fill = as.character(pos_neg))) +
-    theme_bw() +
-    facet_grid(city ~ delt) +
-    scale_fill_manual(
-      name = "Effect Direction",
-      limits = c("1", "-1"),
-      values = c("darkgreen", "darkred"),
-      labels = c("Positive", "Negative")
-    ) +
-    theme(legend.position = "bottom") +
-    scale_y_continuous(limits = c(-1, 1), breaks = seq(-1, 1, 1)) +
-    labs(x = "", y = "Scaled Effect"))
-dev.off()
-
-# line plot
-png(filename = "data_proc/LMDI_effect_2.png", res = 300,
-    width = 2000, height = 1500)
-(lmdi %>%
-    select(-o_0, -o_t, -delt_o) %>%
-    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
-                 names_to = "delt", values_to = "delt_val") %>%
-    group_by(city, year_t, year_0) %>%
-    mutate(delt_abs_max = max(abs(delt_val))) %>%
-    ungroup() %>%
-    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
-    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
-    ggplot() +
-    geom_line(aes(year_t, delt_val_scale, group = city, col = city)) +
-    theme_bw() +
-    facet_wrap(.~ delt))
-dev.off()
-
-# tile plot
-png(filename = "data_proc/LMDI_effect_3.png", res = 300,
-    width = 2400, height = 1500)
-(lmdi %>%
-    select(-o_0, -o_t, -delt_o) %>%
-    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
-                 names_to = "delt", values_to = "delt_val") %>%
-    group_by(city, year_t, year_0) %>%
-    mutate(delt_abs_max = max(abs(delt_val))) %>%
-    ungroup() %>%
-    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
-    mutate(delt = factor(delt, levels = c("delt_p", "delt_s", "delt_f", "delt_i"))) %>%
-    ggplot(aes(year_t, city)) +
+    mutate(
+      delt = case_when(
+        delt == "delt_p" ~ "Population",
+        delt == "delt_s" ~ "Structure",
+        delt == "delt_f" ~ "Frequency",
+        delt == "delt_i" ~ "Intensity"
+      ),
+      year = case_when(
+        year_t == 2017 ~ "2016 - 2017",
+        year_t == 2018 ~ "2017 - 2018",
+        year_t == 2019 ~ "2018 - 2019",
+        year_t == 2020 ~ "2019 - 2020",
+        year_t == 2021 ~ "2020 - 2021"
+      )
+    ) %>%
+    mutate(
+      delt = factor(
+        delt, levels = c("Population", "Structure", "Frequency", "Intensity")
+      ),
+      city = factor(city, levels = rev(kCity))
+    ) %>%
+    ggplot(aes(year, city)) +
     geom_tile(aes(fill = delt_val_scale)) +
-    # theme_bw() +
+    theme(axis.text.x = element_text(angle = 90)) +
     scale_fill_gradient2(
       name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
     ) +
     geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
     facet_wrap(.~ delt, nrow = 1) +
-    labs(x = "", y = "City"))
+    labs(x = "", y = "City")
+)
 dev.off()
