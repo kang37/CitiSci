@@ -109,6 +109,19 @@ record.yr <- record.user.yr %>%
     day_per_user = act_day / user_pop,
     obs_per_day = obs / act_day
   )
+# manually test if some cities of some year do not have data
+table(record.yr$year, record.yr$city)
+# add data to those gap
+record.yr <- record.yr %>%
+  rbind(
+    data.frame(
+      city = c("Nagoya", "Sapporo", "Kawasaki"),
+      year = c(2016, 2016, 2017),
+      obs = 0, user_pop = 0, act_day = 0, prop_long_user = NA,
+      day_per_user = NA, obs_per_day = NA
+    )
+  )
+
 
 # Analysis ----
 ## Observation change ----
@@ -181,17 +194,16 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
                  names_to = "metric", values_to = "metric_val") %>%
     mutate(metric = case_when(
       metric == "user_pop" ~ "Population",
-      metric == "prop_long_user" ~ "Structure",
+      metric == "prop_long_user" ~ "Long-term %",
       metric == "day_per_user" ~ "Frequency",
       metric == "obs_per_day" ~ "Intensity"
     )) %>%
     mutate(metric = factor(
-      metric, levels = c("Population", "Structure", "Frequency", "Intensity")
+      metric, levels = c("Population", "Long-term %", "Frequency", "Intensity")
     )) %>%
     ggplot() +
-    geom_line(
-      aes(as.numeric(as.character(year)), metric_val)
-    ) +
+    geom_line(aes(as.numeric(as.character(year)), metric_val)) +
+    geom_point(aes(as.numeric(as.character(year)), metric_val), size = 0.6) +
     theme(axis.text.x = element_text(angle = 90)) +
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     expand_limits(y = 0) +
