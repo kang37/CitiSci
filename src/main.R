@@ -107,18 +107,36 @@ record.yr <- record.user.yr %>%
   ) %>%
   ungroup() %>%
   mutate(
+    city = factor(city, levels = kCity),
     day_per_user = act_day / user_pop,
     obs_per_day = obs / act_day
   )
 
 # Analysis ----
 ## Observation change ----
+# scaled observation change
 record.yr %>%
   select(city, yr_abbr, obs) %>%
   group_by(city) %>%
   mutate(obs_scale = obs / max(obs)) %>%
   ggplot() +
   geom_line(aes(as.numeric(as.character(yr_abbr)), obs_scale, col = city))
+
+# panel observation change plot
+png(filename = "data_proc/obs_chg.png", res = 350,
+    width = 3600, height = 800)
+(
+  record.yr %>%
+    ggplot() +
+    geom_line(
+      aes(as.numeric(as.character(yr_abbr)), obs)
+    ) +
+    geom_vline(xintercept = 19, col = "red", alpha = 0.5) +
+    facet_wrap(.~ city, scale = "free", nrow = 1) +
+    expand_limits(y = 0) +
+    labs(x = "Year", y = "Number of observations")
+)
+dev.off()
 
 ## User group ----
 ### Metrics ~ user grps ----
@@ -155,42 +173,30 @@ dev.off()
 # 结论：新冠对长短期用户的影响不同
 
 ## Factor mean value change ----
-png(filename = "data_proc/Index_change_for_each_city_1.png", res = 300,
+png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
     select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
     pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
-                 names_to = "index", values_to = "index_val") %>%
-    mutate(
-      index = factor(
-        index, levels = c("user_pop", "prop_long_user", "day_per_user", "obs_per_day"))
-    ) %>%
+                 names_to = "metric", values_to = "metric_val") %>%
+    mutate(metric = case_when(
+      metric == "user_pop" ~ "Population",
+      metric == "prop_long_user" ~ "Structure",
+      metric == "day_per_user" ~ "Frequency",
+      metric == "obs_per_day" ~ "Intensity"
+    )) %>%
+    mutate(metric = factor(
+      metric, levels = c("Population", "Structure", "Frequency", "Intensity")
+    )) %>%
     ggplot() +
     geom_line(
-      aes(as.numeric(as.character(yr_abbr)), index_val)
+      aes(as.numeric(as.character(yr_abbr)), metric_val)
     ) +
-    facet_grid2(vars(index), vars(city), scales = "free", independent = "y")
-)
-dev.off()
-
-png(filename = "data_proc/Index_change_for_each_city_2.png", res = 300,
-    width = 3500, height = 2000)
-(
-  record.yr %>%
-    select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
-    pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
-                 names_to = "index", values_to = "index_val") %>%
-    group_by(city, index) %>%
-    mutate(
-      index_val_scale =
-        (index_val - min(index_val)) / (max(index_val) - min(index_val))
-    ) %>%
-    ggplot() +
-    geom_line(
-      aes(as.numeric(as.character(yr_abbr)), index_val_scale, col = city)
-    ) +
-    facet_wrap(.~ index, scales = "free", nrow = 1)
+    geom_vline(xintercept = 19, col = "red", alpha = 0.5) +
+    expand_limits(y = 0) +
+    facet_grid2(vars(metric), vars(city), scales = "free", independent = "y") +
+    labs(x = "Year", y = "Metric")
 )
 dev.off()
 
