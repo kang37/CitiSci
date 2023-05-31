@@ -32,21 +32,21 @@ GetRaw <- function(file.dir) {
 # yr.tar：对比年份
 CompTwoYr <- function(x, yr.base, yr.tar) {
   # 转化数据格式
-  x$yr_abbr <- as.numeric(as.character(x$yr_abbr))
+  x$year <- as.numeric(as.character(x$year))
 
   # 将数据分成基准年和比较年两部分并且按照城市排序
-  x1 <- subset(x, yr_abbr == yr.base) %>%
+  x1 <- subset(x, year == yr.base) %>%
     mutate(city = factor(city, levels = kCity)) %>%
     arrange(city)
-  x2 <- subset(x, yr_abbr == yr.tar) %>%
+  x2 <- subset(x, year == yr.tar) %>%
     mutate(city = factor(city, levels = kCity)) %>%
     arrange(city)
 
   # 计算各项数值的差异
   # 如果比较年比基准年高则判断为TRUE
   cbind(city = as.character(x1$city),
-        ifelse(x2[names(x2)[!names(x2) %in% c("city", "year", "yr_abbr")]] /
-                 x1[names(x1)[!names(x1) %in% c("city", "year", "yr_abbr")]] > 1,
+        ifelse(x2[names(x2)[!names(x2) %in% c("city", "year", "year")]] /
+                 x1[names(x1)[!names(x1) %in% c("city", "year", "year")]] > 1,
                paste0(yr.tar, " > ", yr.base),
                paste0(yr.tar, " <= ", yr.base))) %>%
     as.data.frame() %>%

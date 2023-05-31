@@ -91,14 +91,12 @@ record.user.yr <- record.raw %>%
     obs_per_day = obs / act_day
   ) %>%
   ungroup() %>%
-  left_join(user.grp, by = "user_id") %>%
-  # 生成年份缩写列用于作图
-  mutate(yr_abbr = as.factor(as.numeric(as.character(year)) - 2000))
+  left_join(user.grp, by = "user_id")
 
 ### Yearly data ----
 # data of each city-year
 record.yr <- record.user.yr %>%
-  group_by(city, yr_abbr) %>%
+  group_by(city, year) %>%
   summarise(
     obs = sum(obs),
     user_pop = n(),
@@ -116,11 +114,11 @@ record.yr <- record.user.yr %>%
 ## Observation change ----
 # scaled observation change
 record.yr %>%
-  select(city, yr_abbr, obs) %>%
+  select(city, year, obs) %>%
   group_by(city) %>%
   mutate(obs_scale = obs / max(obs)) %>%
   ggplot() +
-  geom_line(aes(as.numeric(as.character(yr_abbr)), obs_scale, col = city))
+  geom_line(aes(as.numeric(as.character(year)), obs_scale, col = city))
 
 # panel observation change plot
 png(filename = "data_proc/obs_chg.png", res = 350,
@@ -129,9 +127,10 @@ png(filename = "data_proc/obs_chg.png", res = 350,
   record.yr %>%
     ggplot() +
     geom_line(
-      aes(as.numeric(as.character(yr_abbr)), obs)
+      aes(as.numeric(as.character(year)), obs)
     ) +
-    geom_vline(xintercept = 19, col = "red", alpha = 0.5) +
+    theme(axis.text.x = element_text(angle = 90)) +
+    geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     facet_wrap(.~ city, scale = "free", nrow = 1) +
     expand_limits(y = 0) +
     labs(x = "Year", y = "Number of observations")
@@ -177,7 +176,7 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
-    select(city, yr_abbr, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
+    select(city, year, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
     pivot_longer(cols = c(user_pop, prop_long_user, day_per_user, obs_per_day),
                  names_to = "metric", values_to = "metric_val") %>%
     mutate(metric = case_when(
@@ -191,9 +190,10 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
     )) %>%
     ggplot() +
     geom_line(
-      aes(as.numeric(as.character(yr_abbr)), metric_val)
+      aes(as.numeric(as.character(year)), metric_val)
     ) +
-    geom_vline(xintercept = 19, col = "red", alpha = 0.5) +
+    theme(axis.text.x = element_text(angle = 90)) +
+    geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     expand_limits(y = 0) +
     facet_grid2(vars(metric), vars(city), scales = "free", independent = "y") +
     labs(x = "Year", y = "Metric")
@@ -201,11 +201,12 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
 dev.off()
 
 # 作图：各年份各指标相比前一年的变化
-CompTwoYr(record.yr, yr.base = 16, yr.tar = 17) /
-  CompTwoYr(record.yr, yr.base = 17, yr.tar = 18) /
-  CompTwoYr(record.yr, yr.base = 18, yr.tar = 19) /
-  CompTwoYr(record.yr, yr.base = 19, yr.tar = 20) /
-  CompTwoYr(record.yr, yr.base = 20, yr.tar = 21)
+# bug: doesn't work after delete the var yr_abbr
+CompTwoYr(record.yr, yr.base = 2016, yr.tar = 2017) /
+  CompTwoYr(record.yr, yr.base = 2017, yr.tar = 2018) /
+  CompTwoYr(record.yr, yr.base = 2018, yr.tar = 2019) /
+  CompTwoYr(record.yr, yr.base = 2019, yr.tar = 2020) /
+  CompTwoYr(record.yr, yr.base = 2020, yr.tar = 2021)
 # 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
 
 ## LMDI ----
