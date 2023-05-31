@@ -237,15 +237,15 @@ lmdi <- inner_join(
 # manual check: row number should be 80
 nrow(lmdi)
 
-# calculate
+# calculate the variables for LMDI
 lmdi <- lmdi %>%
   mutate(
     s_i0 = p_i0 / p_0,
     s_it = p_it / p_t,
     f_i0 = d_i0 / p_i0,
     f_it = d_it / p_it,
-    i_i0 = o_i0 / p_i0 / d_i0,
-    i_it = o_it / p_it / d_it
+    i_i0 = o_i0 / d_i0,
+    i_it = o_it / d_it
   ) %>%
   mutate(
     delt_p_i = (o_it - o_i0) / log(o_it / o_i0) * log(p_t / p_0),
