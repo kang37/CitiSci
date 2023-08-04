@@ -109,15 +109,16 @@ record.yr <- record.user.yr %>%
 # manually test if some cities of some year do not have data
 table(record.yr$year, record.yr$city)
 # add data to those gap
-record.yr <- record.yr %>%
-  rbind(
-    data.frame(
-      city = c("Nagoya", "Sapporo", "Kawasaki"),
-      year = c(2016, 2016, 2017),
-      obs = 0, user_pop = 0, act_day = 0, prop_long_user = NA,
-      day_per_user = NA, obs_per_day = NA
-    )
-  )
+# Bug: Seems that the data missing is not a bug in the new code?
+# record.yr <- record.yr %>%
+#   rbind(
+#     data.frame(
+#       city = c("Nagoya", "Sapporo", "Kawasaki"),
+#       year = c(2016, 2016, 2017),
+#       obs = 0, user_pop = 0, act_day = 0, prop_long_user = NA,
+#       day_per_user = NA, obs_per_day = NA
+#     )
+#   )
 
 # Analysis ----
 ## Observation change ----
