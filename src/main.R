@@ -2,14 +2,9 @@
 # 用于分析新冠对公民科学行为的影响，主要思路：从年度和月度粒度上分析，然后分用户组进行分析。
 
 # Package ----
-library(openxlsx)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(ggh4x)
-library(patchwork)
-library(reshape2)
-library(lubridate)
+pacman::p_load(
+  openxlsx, dplyr, tidyr, ggplot2, ggh4x, patchwork, reshape2, lubridate
+)
 
 # Function ----
 source("src/function.R")
@@ -18,7 +13,7 @@ source("src/function.R")
 ## Constant ----
 # 城市：按照人口从多到少排序
 kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
-           "Kobe", "Kawasaki", "Kyoto", "Saitama", "Hiroshima")
+           "Kobe", "Kawasaki", "Kyoto", "Saitama")
 
 ## iNaturalist data ----
 ### Raw data ----
@@ -28,6 +23,8 @@ inat.file <- list.files("data_raw/iNatData", full.names = TRUE)
 # middle data of raw data
 record.raw <- lapply(inat.file, GetRaw) %>%
   do.call(rbind, .)
+# The original number of observations.
+nrow(record.raw)
 
 # Identify the "super user" - it should be noted that a "super user" is city- and year-specific, for example, a super user in one city for a certain year might not be a super user in another city.
 super.user <- record.raw %>%
@@ -38,7 +35,7 @@ super.user <- record.raw %>%
   group_by(city, year) %>%
   mutate(obs_prop = obs / sum(obs)) %>%
   ungroup() %>%
-  # criterion 2: extremly higher observation than the others
+  # criterion 2: extremely higher observation than the others
   group_by(city, year) %>%
   mutate(obs_99 = quantile(obs, 0.99)) %>%
   ungroup() %>%
@@ -122,7 +119,6 @@ record.yr <- record.yr %>%
     )
   )
 
-
 # Analysis ----
 ## Observation change ----
 # scaled observation change
@@ -153,7 +149,7 @@ dev.off()
 ## User group ----
 ### Metrics ~ user grps ----
 # 对比新老用户，看老用户在各项指标上是否都高于新用户
-png(filename = "data_proc/User_behavior_comparison.png", res = 300,
+png(filename = "data_proc/user_behavior_comparison.png", res = 300,
     width = 2000, height = 1000)
 (
   PlotCompObsr(record.user.yr, name.var = "obs",
@@ -194,12 +190,12 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
                  names_to = "metric", values_to = "metric_val") %>%
     mutate(metric = case_when(
       metric == "user_pop" ~ "Population",
-      metric == "prop_long_user" ~ "Long-term %",
+      metric == "prop_long_user" ~ "Structure",
       metric == "day_per_user" ~ "Frequency",
       metric == "obs_per_day" ~ "Intensity"
     )) %>%
     mutate(metric = factor(
-      metric, levels = c("Population", "Long-term %", "Frequency", "Intensity")
+      metric, levels = c("Population", "Structure", "Frequency", "Intensity")
     )) %>%
     ggplot() +
     geom_line(aes(as.numeric(as.character(year)), metric_val)) +
@@ -207,8 +203,10 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
     theme(axis.text.x = element_text(angle = 90)) +
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     expand_limits(y = 0) +
-    facet_grid2(vars(metric), vars(city), scales = "free", independent = "y") +
-    labs(x = "Year", y = "Metric")
+    facet_grid2(
+      vars(metric), vars(city), scales = "free", independent = "y", switch = "y"
+    ) +
+    labs(x = "Year", y = "")
 )
 dev.off()
 
