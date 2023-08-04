@@ -237,6 +237,7 @@ lmdi <- inner_join(
   by = c("city", "year_t", "obsr_grp")
 ) %>%
   select(city, year_0, year_t, obsr_grp, o_i0, o_it, p_i0, p_it, d_i0, d_it) %>%
+  # Filter the missing data.
   filter(!(city == "Kawasaki" & (year_0 == "2017" | year_t == "2017"))) %>%
   filter(!(city == "Nagoya" & (year_0 == "2016" | year_t == "2016"))) %>%
   group_by(city, year_0) %>%
@@ -246,7 +247,7 @@ lmdi <- inner_join(
   mutate(p_t = sum(p_it)) %>%
   ungroup()
 
-# manual check: row number should be 80
+# Row number should be 80; but since we filtered some rows with missin data in the last step, so it should be less than 80.
 nrow(lmdi)
 
 # calculate the variables for LMDI
