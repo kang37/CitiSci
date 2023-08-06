@@ -136,9 +136,8 @@ png(filename = "data_proc/obs_chg.png", res = 350,
 (
   record.yr %>%
     ggplot() +
-    geom_line(
-      aes(as.numeric(as.character(year)), obs)
-    ) +
+    geom_line(aes(as.numeric(as.character(year)), obs)) +
+    geom_point(aes(as.numeric(as.character(year)), obs), size = 0.6) +
     theme(axis.text.x = element_text(angle = 90)) +
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     facet_wrap(.~ city, scale = "free", nrow = 1) +
@@ -205,7 +204,7 @@ png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     expand_limits(y = 0) +
     facet_grid2(
-      vars(metric), vars(city), scales = "free", independent = "y", switch = "y"
+      vars(metric), vars(city), scales = "free", independent = "y"
     ) +
     labs(x = "Year", y = "")
 )
