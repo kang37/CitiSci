@@ -131,7 +131,7 @@ record.yr %>%
   geom_line(aes(as.numeric(as.character(year)), obs_scale, col = city))
 
 # panel observation change plot
-png(filename = "data_proc/obs_chg.png", res = 350,
+jpeg(filename = "data_proc/obs_chg.jpg", res = 350,
     width = 3600, height = 800)
 (
   record.yr %>%
@@ -149,7 +149,7 @@ dev.off()
 ## User group ----
 ### Metrics ~ user grps ----
 # 对比新老用户，看老用户在各项指标上是否都高于新用户
-png(filename = "data_proc/user_behavior_comparison.png", res = 300,
+jpeg(filename = "data_proc/user_behavior_comparison.jpg", res = 300,
     width = 2000, height = 1000)
 (
   PlotCompObsr(record.user.yr, name.var = "obs",
@@ -181,7 +181,7 @@ dev.off()
 # 结论：新冠对长短期用户的影响不同
 
 ## Factor mean value change ----
-png(filename = "data_proc/metric_change_for_each_city.png", res = 300,
+jpeg(filename = "data_proc/metric_change_for_each_city.jpg", res = 300,
     width = 3500, height = 2000)
 (
   record.yr %>%
@@ -278,7 +278,7 @@ lmdi <- lmdi %>%
   mutate(delt_o = o_t - o_0)
 
 # visualization by tile plot
-png(filename = "data_proc/LMDI_effect.png", res = 300,
+jpeg(filename = "data_proc/LMDI_effect.jpg", res = 300,
     width = 3000, height = 2000)
 (
   lmdi %>%
