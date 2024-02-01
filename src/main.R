@@ -11,16 +11,16 @@ source("src/function.R")
 
 # Read data ----
 ## Constant ----
-# 城市：按照人口从多到少排序
+# City factor levels based on pupulation.
 kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
            "Kobe", "Kawasaki", "Kyoto", "Saitama")
 
 ## iNaturalist data ----
 ### Raw data ----
-# 文件路径
+# Raw data directory.
 inat.file <- list.files("data_raw/iNatData", full.names = TRUE)
 
-# middle data of raw data
+# Middle data of raw data.
 record.raw <- lapply(inat.file, GetRaw) %>%
   do.call(rbind, .)
 # The original number of observations.
@@ -28,14 +28,14 @@ nrow(record.raw)
 
 # Identify the "super user" - it should be noted that a "super user" is city- and year-specific, for example, a super user in one city for a certain year might not be a super user in another city.
 super.user <- record.raw %>%
-  # criterion 1: high proportion of contribution
+  # Criterion 1: high proportion of contribution.
   group_by(city, year, user_id) %>%
   summarise(obs = n()) %>%
   ungroup() %>%
   group_by(city, year) %>%
   mutate(obs_prop = obs / sum(obs)) %>%
   ungroup() %>%
-  # criterion 2: extremely higher observation than the others
+  # Criterion 2: extremely higher observation than the others.
   group_by(city, year) %>%
   mutate(obs_99 = quantile(obs, 0.99)) %>%
   ungroup() %>%
@@ -45,22 +45,20 @@ super.user <- record.raw %>%
   )) %>%
   select(city, year, user_id, super_user)
 
-# 用户分组：有两种方式，一种是根据用户是第几年参与公民科学来分类，可以分成“第一年参加组”、“第二年参加组”等等，另一种根据2016到2021年间共参与了几年来将观测者区分为新用户和老用户，这种分类方法当然带有点“注定”的意味，也就是说一个老用户，就算他是第一年参加活动，他也是被算成一个“老用户”。此外，因为有些用户跨城市上传观测数据，所以用户分组的时候应该无视城市，比如有个用户第一年年在一个城市上传了数据，次年在另一个城市上传了数据，那么如果按照上述第一种方式来分类，他的“次年”就应该被算作“第二年”，而非“第一年”。下面暂时采用第二种分组方式对用户进行分组。
-
-# 构造用户数据，计算用户2016到2021年间有上传观测数据的年数
+# User data.frame.
 user.grp <- record.raw %>%
   select(user_id, year) %>%
   distinct() %>%
-  # 计算用户总共上传了几年数据
+  # Number of years with observation.
   group_by(user_id) %>%
   summarise(n_yr = n()) %>%
   ungroup() %>%
-  # 观测总年数大于等于2年都划为老用户
+  # User group based on number of years with observation.
   mutate(obsr_grp = case_when(n_yr <= 1 ~ "short", TRUE ~ "long"))
 table(user.grp$n_yr)
-# 结论：绝大部分用户都是只活跃一年的短期用户
+# Most users are short-term users.
 
-# target city: cities with max year user > 50
+# Target city: cities with max year user > 50.
 tar.city <- record.raw %>%
   group_by(city, year) %>%
   summarise(user_pop = length(unique(user_id))) %>%
@@ -71,7 +69,7 @@ tar.city <- record.raw %>%
   filter(max_user_pop > 50) %>%
   mutate(city = factor(city, levels = kCity))
 
-# remove super users and non-target cities
+# Remove super users and non-target cities.
 record.raw <- record.raw %>%
   filter(city %in% tar.city$city) %>%
   left_join(super.user, c("city", "user_id", "year")) %>%
@@ -79,7 +77,7 @@ record.raw <- record.raw %>%
   select(city, id, user_id, obs_date, year)
 
 ### Yearly user data ----
-# data of each city-year-user
+# Data of each city-year-user.
 record.user.yr <- record.raw %>%
   group_by(city, year, user_id) %>%
   summarise(
@@ -91,7 +89,7 @@ record.user.yr <- record.raw %>%
   left_join(user.grp, by = "user_id")
 
 ### Yearly data ----
-# data of each city-year
+# Data of each city-year.
 record.yr <- record.user.yr %>%
   group_by(city, year) %>%
   summarise(
@@ -106,23 +104,13 @@ record.yr <- record.user.yr %>%
     day_per_user = act_day / user_pop,
     obs_per_day = obs / act_day
   )
-# manually test if some cities of some year do not have data
+# Manually test the data distribution among year-city matrix.
 table(record.yr$year, record.yr$city)
-# add data to those gap
-# Bug: Seems that the data missing is not a bug in the new code?
-# record.yr <- record.yr %>%
-#   rbind(
-#     data.frame(
-#       city = c("Nagoya", "Sapporo", "Kawasaki"),
-#       year = c(2016, 2016, 2017),
-#       obs = 0, user_pop = 0, act_day = 0, prop_long_user = NA,
-#       day_per_user = NA, obs_per_day = NA
-#     )
-#   )
+# Add data to the matrix gaps.
 
 # Analysis ----
 ## Observation change ----
-# scaled observation change
+# Scaled observation change.
 record.yr %>%
   select(city, year, obs) %>%
   group_by(city) %>%
@@ -130,7 +118,8 @@ record.yr %>%
   ggplot() +
   geom_line(aes(as.numeric(as.character(year)), obs_scale, col = city))
 
-# panel observation change plot
+# Panel observation change plot.
+# If there is no dir called "data_proc", make one.
 jpeg(filename = "data_proc/obs_chg.jpg", res = 350,
     width = 3600, height = 800)
 (
@@ -148,7 +137,7 @@ dev.off()
 
 ## User group ----
 ### Metrics ~ user grps ----
-# 对比新老用户，看老用户在各项指标上是否都高于新用户
+# Indexes comparison between long- and short-term users.
 jpeg(filename = "data_proc/user_behavior_comparison.jpg", res = 300,
     width = 2000, height = 1000)
 (
@@ -161,10 +150,10 @@ jpeg(filename = "data_proc/user_behavior_comparison.jpg", res = 300,
     plot_layout(guides = "collect") & theme(legend.position = "bottom")
 )
 dev.off()
-# 结论：老用户观测数通常显著高于新用户，其原因主要是老用户观测天数较多。如果看观测强度，即每观测天观测条数的话，尽管大多数不显著，但是新用户往往甚至高于老用户。可见持之以恒，少量多次才是老用户成功超越新用户的关键。并且注意，这里的“观测天数较多”是指年内观测天数多，而不是因为老用户活动年数多导致的研究时长内总的观测天数多。
+# Conclusion: Long-term users has higher observation because they active more days every year.
 
 ### Metrics ~ years ----
-# 分用户组各指标不同年份对比
+# Indexes of user groups by year.
 ((PlotCovidYr(record.user.yr, user.grp = "long", name.var = "obs",
               name.yaxis = "Observation", name.title = "(a)") /
     PlotCovidYr(record.user.yr, user.grp = "short", name.var = "obs",
@@ -178,7 +167,7 @@ dev.off()
       PlotCovidYr(record.user.yr, user.grp = "short", name.var = "obs_per_day",
                   name.yaxis = "Daily observation", name.title = "(f)"))) +
   plot_layout(guides = "collect") & theme(legend.position = "bottom")
-# 结论：新冠对长短期用户的影响不同
+# Conclusion: The pandemic has different impacts on different user groups.
 
 ## Factor mean value change ----
 jpeg(filename = "data_proc/metric_change_for_each_city.jpg", res = 300,
@@ -210,21 +199,22 @@ jpeg(filename = "data_proc/metric_change_for_each_city.jpg", res = 300,
 )
 dev.off()
 
-# 作图：各年份各指标相比前一年的变化
-# bug: doesn't work after delete the var yr_abbr
+# How do the indexes change compared to the last year?
+# Bug: Might not work after delete the var yr_abbr.
 CompTwoYr(record.yr, yr.base = 2016, yr.tar = 2017) /
   CompTwoYr(record.yr, yr.base = 2017, yr.tar = 2018) /
   CompTwoYr(record.yr, yr.base = 2018, yr.tar = 2019) /
   CompTwoYr(record.yr, yr.base = 2019, yr.tar = 2020) /
   CompTwoYr(record.yr, yr.base = 2020, yr.tar = 2021)
-# 结论：2020年之前上升的主要是下面的指标，而2020年及之后上升的主要是上面的指标，意味着虽然总观测数、总用户数、总活跃天数等可能减少了，但是新冠期间的用户比此前更加活跃
+# Conlcusion: Some users are more active during the pandemic?
 
 ## LMDI ----
+# To attribute the change of observations into different factors.
 lmdi <- record.user.yr %>%
   group_by(city, year, obsr_grp) %>%
   summarise(o_i = sum(obs), p_i = n(), d_i = sum(act_day)) %>%
   arrange(city, year, obsr_grp)
-# check data
+# Check data.
 table(lmdi$city, lmdi$year, lmdi$obsr_grp)
 
 lmdi <- inner_join(
@@ -249,7 +239,7 @@ lmdi <- inner_join(
 # Row number should be 80; but since we filtered some rows with missin data in the last step, so it should be less than 80.
 nrow(lmdi)
 
-# calculate the variables for LMDI
+# Calculate the variables for LMDI.
 lmdi <- lmdi %>%
   mutate(
     s_i0 = p_i0 / p_0,
@@ -277,7 +267,7 @@ lmdi <- lmdi %>%
   ungroup() %>%
   mutate(delt_o = o_t - o_0)
 
-# visualization by tile plot
+# Visualization by tile plot.
 jpeg(filename = "data_proc/LMDI_effect.jpg", res = 300,
     width = 3000, height = 2000)
 (
