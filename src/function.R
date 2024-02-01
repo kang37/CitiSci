@@ -1,7 +1,7 @@
 # Function ----
-# 函数：读取公民科学各条记录文件合成一个列表，列表各元素分别为各个城市的数据
-# 参数：
-# file.dir：文件路径
+# Function: Read and merge raw data into a list, each element of the list for a city.
+# Argument:
+# file.dir: file directory.
 GetRaw <- function(file.dir) {
   city.name <- strsplit(file.dir, "/") %>%
     .[[1]] %>%
@@ -9,7 +9,7 @@ GetRaw <- function(file.dir) {
     gsub(".csv", "", .)
   read.csv(file.dir) %>%
     tibble() %>%
-    # 生成年月日数据
+    # Get date.
     rename(obs_date = observed_on) %>%
     mutate(
       obs_date = as_date(obs_date),
@@ -18,23 +18,22 @@ GetRaw <- function(file.dir) {
       month = month(obs_date),
       day = day(obs_date)
     ) %>%
-    # 由于有些城市只有2016年及之后的数据，所以就保留共同年份的数据
+    # Keep the data after 2015.
     subset(year > 2015) %>%
     mutate(year = as.factor(year)) %>%
     select(city, id, user_id, obs_date, year) %>%
     return()
 }
 
-# 函数：对比各城市2019和2020年的数据并可视化
-# 参数：
-# x：各城市各年份各项指标数值数据框
-# yr.base：基准年
-# yr.tar：对比年份
+# Function: Compare data of two years and visualize the results.
+# Argument:
+# x: data frame for each city-year-index.
+# yr.base: base year.
+# yr.tar: the second year.
 CompTwoYr <- function(x, yr.base, yr.tar) {
-  # 转化数据格式
   x$year <- as.numeric(as.character(x$year))
 
-  # 将数据分成基准年和比较年两部分并且按照城市排序
+  # Divide data by year.
   x1 <- subset(x, year == yr.base) %>%
     mutate(city = factor(city, levels = kCity)) %>%
     arrange(city)
@@ -42,15 +41,14 @@ CompTwoYr <- function(x, yr.base, yr.tar) {
     mutate(city = factor(city, levels = kCity)) %>%
     arrange(city)
 
-  # 计算各项数值的差异
-  # 如果比较年比基准年高则判断为TRUE
+  # Calculate difference between the values.
   cbind(city = as.character(x1$city),
         ifelse(x2[names(x2)[!names(x2) %in% c("city", "year", "year")]] /
                  x1[names(x1)[!names(x1) %in% c("city", "year", "year")]] > 1,
                paste0(yr.tar, " > ", yr.base),
                paste0(yr.tar, " <= ", yr.base))) %>%
     as.data.frame() %>%
-    # 转化成长数据并作图
+    # Turn to long data and visualization.
     melt(data = ., id = "city") %>%
     mutate(city = factor(city, levels = kCity)) %>%
     ggplot() +
@@ -58,11 +56,10 @@ CompTwoYr <- function(x, yr.base, yr.tar) {
     theme(axis.text.x = element_text(angle = 90))
 }
 
-# 函数：分组计算输入数据的样本量、均值、SD、SE和统计检验结果等，用于用户分析
-# 参数：
-# x：各城市各用户带分组信息的数据
-# name.var：要分析的指标
-# 输出：各城市统计整理后的数据框
+# Function: group-summarise the sample size, mean, SD, SE, etc.
+# Argument:
+# x: data of each city with user group information.
+# name.var: target index.
 MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
   # 对各城市分组计算样本量、均值、SD
   x_output <- x %>%
@@ -76,7 +73,7 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
     ungroup()
   names(x_output)[which(names(x_output) == "get(name.grp)")] <- name.grp
 
-  # 对各个城市统计对比不同分组之间的差异
+  # Statistic comparison of data of different cities.
   x_aov <- vector("logical")
   for (i in unique(x$city)) {
     x_city <- subset(x, city == i)
@@ -88,12 +85,11 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
   }
   x_aov <- data.frame(city = unique(x$city), aov = x_aov)
 
-  # 合并统计结果到输出数据框
+  # Merge statistic analysis results to a data.frame.
   x_output <- merge(x_output, x_aov, all.x = TRUE)
   x_output$aov_mark <- "   "
   x_output$aov_mark[x_output$aov] <- " * "
 
-  # 根据城市排序
   x_output <- x_output %>%
     mutate(city = factor(city, levels = kCity)) %>%
     arrange(city)
@@ -101,13 +97,16 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
   return(x_output)
 }
 
-# 函数：做带误差棒点图，并显示组间对比结果，目前用于用户分析
-# 参数：
-# x：包含各城市分组平均值、误差值等的数据
-# 漏洞：如何解决图中横轴标签按照城市排序的问题？
+# Function: Mean value column plot with SE bar, for user group analysis.
+# Argument:
+# x: data with mean value and SE of each city.
+# Bug: How to fix the order of the labels - not important though?
 PlotBarError <- function(x, name.grp = "obsr_grp",
                          name.yaxis = NULL, name.title = NULL) {
-  ggplot(data = x, aes(paste0(city, aov_mark), mean, fill = factor(get(name.grp)))) +
+  ggplot(
+    data = x, aes(paste0(city, aov_mark), mean,
+                  fill = factor(get(name.grp)))
+  ) +
     geom_bar(stat = "identity", position = position_dodge()) +
     geom_errorbar(aes(ymin = mean - se, ymax = mean + se, width = 0.2),
                   position = position_dodge(0.9)) +
@@ -116,16 +115,15 @@ PlotBarError <- function(x, name.grp = "obsr_grp",
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 }
 
-# 函数：做带误差棒的条形图，对比新老用户的表现差异
-# 参数：
-# x：带年份、组别、指标的各城市用户数据
-# name.yr：目标年份
-# user.grp：目标用户组别
-# name.var：目标指标
-# name.yaxis：Y轴标题
-# name.title：图片标题
+# Function: Mean-value column plot with SE bar, to compare user groups.
+# Argument:
+# x：user data with year, group, index information.
+# name.yr：target year.
+# user.grp：target user group.
+# name.var：target index.
+# name.yaxis：Y-axis title.
+# name.title：figure title.
 PlotCompObsr <- function(x, name.var, name.title, ...) {
-  # 横轴按照城市排序所需因子水平数据
   x.axis.lab <- MeanSeAov(x, name.var = name.var) %>%
     select(city, aov_mark) %>%
     unique()
@@ -133,34 +131,30 @@ PlotCompObsr <- function(x, name.var, name.title, ...) {
   MeanSeAov(x, name.var = name.var) %>%
     PlotBarError(name.title = name.title, ...) +
     scale_fill_manual(name = "User group", values = c("#FFA500", "#1047A9")) +
-    # 横轴标签按照城市进行排序
     scale_x_discrete(limits = paste0(x.axis.lab$city, x.axis.lab$aov_mark))
 }
 
-# 函数：从用户数据中筛除目标年份和用户组别，做带误差棒的条形图，对比新冠期间和此前的差别
-# 参数：
-# x：带年份、组别、指标的各城市用户数据
-# name.yr：目标年份
-# user.grp：目标用户组别
-# name.var：目标指标
-# name.yaxis：Y轴标题
-# name.title：图片标题
+# Function: Plot to show the difference before and after COVID-19.
+# Argument:
+# x：user data with year, group, index information.
+# name.yr: target year.
+# user.grp: target user group.
+# name.var: target index.
+# name.yaxis：Y-axis title.
+# name.title：figure title.
 PlotCovidYr <- function(x, name.yr = c("2019", "2020", "2021"),
                         user.grp, name.var, name.yaxis, name.title) {
-  # 横轴按照城市排序所需因子水平数据
   x.axis.lab <- subset(x, year %in% name.yr & obsr_grp == user.grp) %>%
     MeanSeAov(., name.grp = "year", name.var = name.var) %>%
     select(city, aov_mark) %>%
     unique()
 
-  # 保留目标年老用户数据
   subset(x, year %in% name.yr & obsr_grp == user.grp) %>%
-    # 计算平均值、误差、显著性等
+    # Calculate mean value, SE, p-value etc.
     MeanSeAov(., name.grp = "year", name.var = name.var) %>%
     PlotBarError(name.grp = "year",
                  name.yaxis = name.yaxis, name.title = name.title) +
     scale_fill_manual(name = "Year",
                       values = c("#009999", "#FFCE00", "#FF0000")) +
-    # 横轴标签按照城市进行排序
     scale_x_discrete(limits = paste0(x.axis.lab$city, x.axis.lab$aov_mark))
 }
