@@ -30,8 +30,7 @@ nrow(record.raw)
 super.user <- record.raw %>%
   # Criterion 1: high proportion of contribution.
   group_by(city, year, user_id) %>%
-  summarise(obs = n()) %>%
-  ungroup() %>%
+  summarise(obs = n(), .groups = "drop") %>%
   group_by(city, year) %>%
   mutate(obs_prop = obs / sum(obs)) %>%
   ungroup() %>%
@@ -61,11 +60,9 @@ table(user.grp$n_yr)
 # Target city: cities with max year user > 50.
 tar.city <- record.raw %>%
   group_by(city, year) %>%
-  summarise(user_pop = length(unique(user_id))) %>%
-  ungroup() %>%
+  summarise(user_pop = length(unique(user_id)), .groups = "drop") %>%
   group_by(city) %>%
-  summarise(max_user_pop = max(user_pop)) %>%
-  ungroup() %>%
+  summarise(max_user_pop = max(user_pop), .groups = "drop") %>%
   filter(max_user_pop > 50) %>%
   mutate(city = factor(city, levels = kCity))
 
@@ -83,9 +80,9 @@ record.user.yr <- record.raw %>%
   summarise(
     obs = n(),
     act_day = length(unique(obs_date)),
-    obs_per_day = obs / act_day
+    obs_per_day = obs / act_day,
+    .groups = "drop"
   ) %>%
-  ungroup() %>%
   left_join(user.grp, by = "user_id")
 
 ### Yearly data ----
@@ -96,9 +93,9 @@ record.yr <- record.user.yr %>%
     obs = sum(obs),
     user_pop = n(),
     act_day = sum(act_day),
-    prop_long_user = sum(obsr_grp == "long") / user_pop
+    prop_long_user = sum(obsr_grp == "long") / user_pop,
+    .groups = "drop"
   ) %>%
-  ungroup() %>%
   mutate(
     city = factor(city, levels = kCity),
     day_per_user = act_day / user_pop,
@@ -206,13 +203,15 @@ CompTwoYr(record.yr, yr.base = 2016, yr.tar = 2017) /
   CompTwoYr(record.yr, yr.base = 2018, yr.tar = 2019) /
   CompTwoYr(record.yr, yr.base = 2019, yr.tar = 2020) /
   CompTwoYr(record.yr, yr.base = 2020, yr.tar = 2021)
-# Conlcusion: Some users are more active during the pandemic?
+# Conclusion: Some users are more active during the pandemic?
 
 ## LMDI ----
 # To attribute the change of observations into different factors.
 lmdi <- record.user.yr %>%
   group_by(city, year, obsr_grp) %>%
-  summarise(o_i = sum(obs), p_i = n(), d_i = sum(act_day)) %>%
+  summarise(
+    o_i = sum(obs), p_i = n(), d_i = sum(act_day), .groups = "drop"
+  ) %>%
   arrange(city, year, obsr_grp)
 # Check data.
 table(lmdi$city, lmdi$year, lmdi$obsr_grp)
@@ -227,8 +226,7 @@ lmdi <- inner_join(
 ) %>%
   select(city, year_0, year_t, obsr_grp, o_i0, o_it, p_i0, p_it, d_i0, d_it) %>%
   # Filter the missing data.
-  filter(!(city == "Kawasaki" & (year_0 == "2017" | year_t == "2017"))) %>%
-  filter(!(city == "Nagoya" & (year_0 == "2016" | year_t == "2016"))) %>%
+  # filter(!(city == "Nagoya" & (year_0 == "2016" | year_t == "2016"))) %>%
   group_by(city, year_0) %>%
   mutate(p_0 = sum(p_i0)) %>%
   ungroup() %>%
@@ -269,7 +267,7 @@ lmdi <- lmdi %>%
 
 # Visualization by tile plot.
 jpeg(filename = "data_proc/LMDI_effect.jpg", res = 300,
-    width = 3000, height = 2000)
+    width = 3500, height = 2000)
 (
   lmdi %>%
     select(-o_0, -o_t, -delt_o) %>%
@@ -291,7 +289,9 @@ jpeg(filename = "data_proc/LMDI_effect.jpg", res = 300,
         year_t == 2018 ~ "2017 - 2018",
         year_t == 2019 ~ "2018 - 2019",
         year_t == 2020 ~ "2019 - 2020",
-        year_t == 2021 ~ "2020 - 2021"
+        year_t == 2021 ~ "2020 - 2021",
+        year_t == 2022 ~ "2021 - 2022",
+        year_t == 2023 ~ "2022 - 2023"
       )
     ) %>%
     mutate(

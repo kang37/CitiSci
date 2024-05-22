@@ -19,7 +19,7 @@ GetRaw <- function(file.dir) {
       day = day(obs_date)
     ) %>%
     # Keep the data after 2015.
-    subset(year > 2015) %>%
+    filter(year > 2015, year < 2024) %>%
     mutate(year = as.factor(year)) %>%
     select(city, id, user_id, obs_date, year) %>%
     return()
