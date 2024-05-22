@@ -226,7 +226,6 @@ lmdi <- inner_join(
 ) %>%
   select(city, year_0, year_t, obsr_grp, o_i0, o_it, p_i0, p_it, d_i0, d_it) %>%
   # Filter the missing data.
-  # filter(!(city == "Nagoya" & (year_0 == "2016" | year_t == "2016"))) %>%
   group_by(city, year_0) %>%
   mutate(p_0 = sum(p_i0)) %>%
   ungroup() %>%
@@ -248,10 +247,14 @@ lmdi <- lmdi %>%
     i_it = o_it / d_it
   ) %>%
   mutate(
-    delt_p_i = (o_it - o_i0) / log(o_it / o_i0) * log(p_t / p_0),
-    delt_s_i = (o_it - o_i0) / log(o_it / o_i0) * log(s_it / s_i0),
-    delt_f_i = (o_it - o_i0) / log(o_it / o_i0) * log(f_it / f_i0),
-    delt_i_i = (o_it - o_i0) / log(o_it / o_i0) * log(i_it / i_i0)
+    diff_o_it_o_i0 = case_when(o_it - o_i0 == 1 ~ 0.0001, TRUE ~ o_it - o_i0),
+    rate_o_it_o_i0 = case_when(o_it / o_i0 == 1 ~ 0.9999, TRUE ~ o_it / o_i0)
+  ) %>%
+  mutate(
+    delt_p_i = diff_o_it_o_i0 / log(rate_o_it_o_i0) * log(p_t / p_0),
+    delt_s_i = diff_o_it_o_i0 / log(rate_o_it_o_i0) * log(s_it / s_i0),
+    delt_f_i = diff_o_it_o_i0 / log(rate_o_it_o_i0) * log(f_it / f_i0),
+    delt_i_i = diff_o_it_o_i0 / log(rate_o_it_o_i0) * log(i_it / i_i0)
   ) %>%
   group_by(city, year_t, year_0) %>%
   summarise(
@@ -260,9 +263,9 @@ lmdi <- lmdi %>%
     delt_p = sum(delt_p_i),
     delt_s = sum(delt_s_i),
     delt_f = sum(delt_f_i),
-    delt_i = sum(delt_i_i)
+    delt_i = sum(delt_i_i),
+    .groups = "drop"
   ) %>%
-  ungroup() %>%
   mutate(delt_o = o_t - o_0)
 
 # Visualization by tile plot.
