@@ -11,7 +11,7 @@ source("src/function.R")
 
 # Read data ----
 ## Constant ----
-# City factor levels based on pupulation.
+# City factor levels based on population.
 kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
            "Kobe", "Kawasaki", "Kyoto", "Saitama")
 
