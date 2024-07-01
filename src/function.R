@@ -68,9 +68,9 @@ MeanSeAov <- function(x, name.grp = "obsr_grp", name.var = "obs") {
       n = n(),
       mean = mean(get(name.var)),
       sd = sd(get(name.var)),
-      se = sd/n
-    ) %>%
-    ungroup()
+      se = sd/n,
+      .groups = "drop"
+    )
   names(x_output)[which(names(x_output) == "get(name.grp)")] <- name.grp
 
   # Statistic comparison of data of different cities.
@@ -111,6 +111,7 @@ PlotBarError <- function(x, name.grp = "obsr_grp",
     geom_errorbar(aes(ymin = mean - se, ymax = mean + se, width = 0.2),
                   position = position_dodge(0.9)) +
     labs(y = name.yaxis, title = name.title) +
+    theme_bw() +
     theme(axis.title.x = element_blank(),
           axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 }

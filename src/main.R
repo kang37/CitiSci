@@ -12,8 +12,10 @@ source("src/function.R")
 # Read data ----
 ## Constant ----
 # City factor levels based on population.
-kCity <- c("Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
-           "Kobe", "Kawasaki", "Kyoto", "Saitama")
+kCity <- c(
+  "Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
+  "Kobe", "Kawasaki", "Kyoto", "Saitama"
+)
 
 ## iNaturalist data ----
 ### Raw data ----
@@ -67,15 +69,17 @@ tar.city <- record.raw %>%
   mutate(city = factor(city, levels = kCity))
 
 # Remove super users and non-target cities.
-record.raw <- record.raw %>%
+record.filt <- record.raw %>%
   filter(city %in% tar.city$city) %>%
   left_join(super.user, c("city", "user_id", "year")) %>%
   filter(!super_user) %>%
   select(city, id, user_id, obs_date, year)
+# Observation number of filtered data.
+nrow(record.filt)
 
 ### Yearly user data ----
 # Data of each city-year-user.
-record.user.yr <- record.raw %>%
+record.user.yr <- record.filt %>%
   group_by(city, year, user_id) %>%
   summarise(
     obs = n(),
@@ -118,12 +122,13 @@ record.yr %>%
 # Panel observation change plot.
 # If there is no dir called "data_proc", make one.
 jpeg(filename = "data_proc/obs_chg.jpg", res = 350,
-    width = 3600, height = 800)
+    width = 3800, height = 600)
 (
   record.yr %>%
     ggplot() +
     geom_line(aes(as.numeric(as.character(year)), obs)) +
     geom_point(aes(as.numeric(as.character(year)), obs), size = 0.6) +
+    theme_bw() +
     theme(axis.text.x = element_text(angle = 90)) +
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     facet_wrap(.~ city, scale = "free", nrow = 1) +
