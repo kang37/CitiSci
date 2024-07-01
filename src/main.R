@@ -179,7 +179,7 @@ dev.off()
 
 ## Factor mean value change ----
 jpeg(filename = "data_proc/metric_change_for_each_city.jpg", res = 300,
-    width = 3500, height = 2000)
+    width = 3500, height = 1600)
 (
   record.yr %>%
     select(city, year, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
@@ -197,6 +197,7 @@ jpeg(filename = "data_proc/metric_change_for_each_city.jpg", res = 300,
     ggplot() +
     geom_line(aes(as.numeric(as.character(year)), metric_val)) +
     geom_point(aes(as.numeric(as.character(year)), metric_val), size = 0.6) +
+    theme_bw() +
     theme(axis.text.x = element_text(angle = 90)) +
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     expand_limits(y = 0) +
