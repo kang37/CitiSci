@@ -73,7 +73,8 @@ record.filt <- record.raw %>%
   filter(city %in% tar.city$city) %>%
   left_join(super.user, c("city", "user_id", "year")) %>%
   filter(!super_user) %>%
-  select(city, id, user_id, obs_date, year)
+  select(city, id, user_id, obs_date, year) %>%
+  mutate(city = factor(city, levels = kCity))
 # Observation number of filtered data.
 nrow(record.filt)
 
@@ -110,6 +111,11 @@ table(record.yr$year, record.yr$city)
 # Add data to the matrix gaps.
 
 # Analysis ----
+## General description ----
+record.filt %>%
+  group_by(city) %>%
+  summarise(n = n(), .groups = "drop")
+
 ## Observation change ----
 # Scaled observation change.
 record.yr %>%
