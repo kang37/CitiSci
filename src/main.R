@@ -281,7 +281,7 @@ lmdi <- lmdi %>%
   mutate(delt_o = o_t - o_0)
 
 # Visualization by tile plot.
-jpeg(filename = "data_proc/LMDI_effect.jpg", res = 300,
+jpeg(filename = "data_proc/lmdi_effect.jpg", res = 300,
     width = 3500, height = 2000)
 (
   lmdi %>%
