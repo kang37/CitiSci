@@ -127,8 +127,10 @@ record.yr %>%
 
 # Panel observation change plot.
 # If there is no dir called "data_proc", make one.
-jpeg(filename = "data_proc/obs_chg.jpg", res = 350,
-    width = 3800, height = 600)
+jpeg(
+  filename = paste0("data_proc/obs_chg_", Sys.Date(), ".jpg"),
+  res = 350, width = 3800, height = 600
+)
 (
   record.yr %>%
     ggplot() +
@@ -146,8 +148,10 @@ dev.off()
 ## User group ----
 ### Metrics ~ user grps ----
 # Indexes comparison between long- and short-term users.
-jpeg(filename = "data_proc/user_behavior_comparison.jpg", res = 300,
-    width = 2000, height = 1000)
+jpeg(
+  filename = paste0("data_proc/user_behavior_comparison_", Sys.Date(), ".jpg"),
+  res = 300, width = 2000, height = 1000
+)
 (
   PlotCompObsr(record.user.yr, name.var = "obs",
                name.yaxis = "Observation", name.title = "(a)") +
@@ -178,8 +182,10 @@ dev.off()
 # Conclusion: The pandemic has different impacts on different user groups.
 
 ## Factor mean value change ----
-jpeg(filename = "data_proc/metric_change_for_each_city.jpg", res = 300,
-    width = 3500, height = 1600)
+jpeg(
+  filename = paste0("data_proc/metric_chg_for_each_city_", Sys.Date(), ".jpg"),
+  res = 300, width = 3500, height = 1600
+)
 (
   record.yr %>%
     select(city, year, user_pop, prop_long_user, day_per_user, obs_per_day) %>%
@@ -281,8 +287,10 @@ lmdi <- lmdi %>%
   mutate(delt_o = o_t - o_0)
 
 # Visualization by tile plot.
-jpeg(filename = "data_proc/lmdi_effect.jpg", res = 300,
-    width = 3500, height = 2000)
+jpeg(
+  filename = paste0("data_proc/lmdi_effect_", Sys.Date(), ".jpg"),
+  res = 300, width = 3500, height = 2000
+)
 (
   lmdi %>%
     select(-o_0, -o_t, -delt_o) %>%
