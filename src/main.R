@@ -146,7 +146,6 @@ jpeg(
 dev.off()
 
 ## User group ----
-### Metrics ~ user grps ----
 # Indexes comparison between long- and short-term users.
 jpeg(
   filename = paste0("data_proc/user_behavior_comparison_", Sys.Date(), ".jpg"),
@@ -163,23 +162,6 @@ jpeg(
 )
 dev.off()
 # Conclusion: Long-term users has higher observation because they active more days every year.
-
-### Metrics ~ years ----
-# Indexes of user groups by year.
-((PlotCovidYr(record.user.yr, user.grp = "long", name.var = "obs",
-              name.yaxis = "Observation", name.title = "(a)") /
-    PlotCovidYr(record.user.yr, user.grp = "short", name.var = "obs",
-                name.yaxis = "Observation", name.title = "(d)")) |
-   (PlotCovidYr(record.user.yr, user.grp = "long", name.var = "act_day",
-                name.yaxis = "Active day", name.title = "(b)") /
-      PlotCovidYr(record.user.yr, user.grp = "short", name.var = "act_day",
-                  name.yaxis = "Active day", name.title = "(e)")) |
-   (PlotCovidYr(record.user.yr, user.grp = "long", name.var = "obs_per_day",
-                name.yaxis = "Daily observation", name.title = "(c)") /
-      PlotCovidYr(record.user.yr, user.grp = "short", name.var = "obs_per_day",
-                  name.yaxis = "Daily observation", name.title = "(f)"))) +
-  plot_layout(guides = "collect") & theme(legend.position = "bottom")
-# Conclusion: The pandemic has different impacts on different user groups.
 
 ## Factor mean value change ----
 jpeg(
