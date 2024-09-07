@@ -154,9 +154,9 @@ jpeg(
 )
 (
   PlotCompObsr(record.user.yr, name.var = "obs",
-               name.yaxis = "Observation", name.title = "(a)") +
+               name.yaxis = "Annual\nObservation", name.title = "(a)") +
     PlotCompObsr(record.user.yr, name.var = "act_day",
-                 name.yaxis = "Active day", name.title = "(b)") +
+                 name.yaxis = "Annual\nActive day", name.title = "(b)") +
     PlotCompObsr(record.user.yr, name.var = "obs_per_day",
                  name.yaxis = "Daily observation", name.title = "(c)") +
     plot_layout(guides = "collect") & theme(legend.position = "bottom")
