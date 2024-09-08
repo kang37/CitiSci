@@ -324,6 +324,48 @@ lmdi <- lmdi %>%
     .groups = "drop"
   ) %>%
   mutate(delt_o = o_t - o_0)
+# Scale the effects.
+lmdi_scale <- lmdi %>%
+  # Scale by dividing max value.
+  select(-o_0, -o_t, -delt_o) %>%
+  pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
+               names_to = "delt", values_to = "delt_val") %>%
+  group_by(city, year_t, year_0) %>%
+  mutate(delt_abs_max = max(abs(delt_val))) %>%
+  ungroup() %>%
+  mutate(delt_val_scale = delt_val / delt_abs_max) %>%
+  # Revise values.
+  mutate(
+    delt = case_when(
+      delt == "delt_p" ~ "Population",
+      delt == "delt_s" ~ "Structure",
+      delt == "delt_f" ~ "Frequency",
+      delt == "delt_i" ~ "Intensity"
+    ),
+    year = case_when(
+      year_t == 2017 ~ "2016 - 2017",
+      year_t == 2018 ~ "2017 - 2018",
+      year_t == 2019 ~ "2018 - 2019",
+      year_t == 2020 ~ "2019 - 2020",
+      year_t == 2021 ~ "2020 - 2021",
+      year_t == 2022 ~ "2021 - 2022",
+      year_t == 2023 ~ "2022 - 2023"
+    )
+  ) %>%
+  # Add NA values.
+  select(city, year, delt, delt_val_scale) %>%
+  pivot_wider(names_from = city, values_from = delt_val_scale) %>%
+  pivot_longer(
+    cols = unique(lmdi_scale$city),
+    names_to = "city", values_to = "delt_val_scale"
+  ) %>%
+  # Add factor information.
+  mutate(
+    delt = factor(
+      delt, levels = c("Population", "Structure", "Frequency", "Intensity")
+    ),
+    city = factor(city, levels = rev(kCity))
+  )
 
 # Visualization by tile plot.
 jpeg(
@@ -331,45 +373,25 @@ jpeg(
   res = 300, width = 3500, height = 2000
 )
 (
-  lmdi %>%
-    select(-o_0, -o_t, -delt_o) %>%
-    pivot_longer(cols = c(delt_p, delt_s, delt_f, delt_i),
-                 names_to = "delt", values_to = "delt_val") %>%
-    group_by(city, year_t, year_0) %>%
-    mutate(delt_abs_max = max(abs(delt_val))) %>%
-    ungroup() %>%
-    mutate(delt_val_scale = delt_val / delt_abs_max) %>%
-    mutate(
-      delt = case_when(
-        delt == "delt_p" ~ "Population",
-        delt == "delt_s" ~ "Structure",
-        delt == "delt_f" ~ "Frequency",
-        delt == "delt_i" ~ "Intensity"
-      ),
-      year = case_when(
-        year_t == 2017 ~ "2016 - 2017",
-        year_t == 2018 ~ "2017 - 2018",
-        year_t == 2019 ~ "2018 - 2019",
-        year_t == 2020 ~ "2019 - 2020",
-        year_t == 2021 ~ "2020 - 2021",
-        year_t == 2022 ~ "2021 - 2022",
-        year_t == 2023 ~ "2022 - 2023"
-      )
-    ) %>%
-    mutate(
-      delt = factor(
-        delt, levels = c("Population", "Structure", "Frequency", "Intensity")
-      ),
-      city = factor(city, levels = rev(kCity))
-    ) %>%
+  lmdi_scale %>%
     ggplot(aes(year, city)) +
-    geom_tile(aes(fill = delt_val_scale)) +
-    theme(axis.text.x = element_text(angle = 90)) +
+    geom_tile(aes(fill = delt_val_scale), col = "grey") +
     scale_fill_gradient2(
-      name = "Effect", low = "darkred", high = "darkgreen", mid = "white"
+      name = "Effect", low = "darkred", high = "darkgreen", mid = "white",
+      na.value = "grey"
     ) +
     geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 90)) +
     facet_wrap(.~ delt, nrow = 1) +
     labs(x = "", y = "City")
 )
 dev.off()
+
+# Importance of effects.
+lmdi_scale %>%
+  group_by(delt) %>%
+  summarise(
+    delt_val_scale_abs_mean = mean(abs(delt_val_scale)), .groups = "drop"
+  ) %>%
+  arrange(-delt_val_scale_abs_mean)
