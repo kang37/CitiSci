@@ -147,7 +147,7 @@ dev.off()
 
 ## User group ----
 # Compare long-term and short-term users.
-# Firstly, test normality of values for each city--group-metric.
+# Firstly, test normality of values for each city-group-metric.
 record.user.yr %>%
   select(-n_yr) %>%
   pivot_longer(
@@ -159,51 +159,65 @@ record.user.yr %>%
   pull(norm_dist_dir) %>%
   table()
 # Since no data is normal distributed, use Mann-Whitney test.
-left_join(
-  # Average rank of diff user groups.
+# One side Wilcox test: long-term > short-term.
+user.comp.res <-
   record.user.yr %>%
-    select(-n_yr) %>%
-    pivot_longer(
-      cols = c(obs, act_day, obs_per_day), names_to = "metric", values_to = "val"
-    ) %>%
-    # Calculate rank.
-    group_by(city, metric) %>%
-    mutate(rank = rank(val)) %>%
-    ungroup() %>%
-    group_by(city, obsr_grp) %>%
-    mutate(rank = (rank - min(rank)) / (max(rank) - min(rank))) %>%
-    group_by(city, metric, obsr_grp) %>%
-    summarise(rank = mean(rank), .groups = "drop"),
-  record.user.yr %>%
-    select(-n_yr) %>%
-    pivot_longer(
-      cols = c(obs, act_day, obs_per_day),
-      names_to = "metric", values_to = "val"
-    ) %>%
-    mutate(obsr_grp = factor(obsr_grp, levels = c("long", "short"))) %>%
-    # Calculate p mark from Wilcox test.
-    group_by(city, metric) %>%
-    summarise(
-      model_res = list(wilcox.test(val ~ obsr_grp)),
-      .groups = "drop"
-    ) %>%
-    mutate(
-      p = lapply(model_res, function(x) x$p.value),
-      p_mark = case_when(
-        p < 0.001 ~ " ***",
-        p < 0.01 ~ " **",
-        p < 0.05 ~ " *",
-        p >= 0.05 ~ " "
-      )
-    ) %>%
-    select(-model_res),
-  by = join_by(city, metric)
-) %>%
-  mutate(city = paste0(city, p_mark)) %>%
+  select(-n_yr) %>%
+  pivot_longer(
+    cols = c(obs, act_day, obs_per_day),
+    names_to = "metric", values_to = "val"
+  ) %>%
+  mutate(obsr_grp = factor(obsr_grp, levels = c("long", "short"))) %>%
+  # Calculate p mark from Wilcox test.
+  group_by(city, metric) %>%
+  summarise(
+    long_short =
+      list(wilcox.test(val ~ obsr_grp, alternative = "greater")) %>%
+      lapply(., function(x) x$p.value) %>%
+      unlist(),
+    short_long =
+      list(wilcox.test(val ~ obsr_grp, alternative = "less")) %>%
+      lapply(., function(x) x$p.value) %>%
+      unlist(),
+    .groups = "drop"
+  )
+
+jpeg(
+  filename = paste0("data_proc/user_behavior_comp_", Sys.Date(), ".jpg"),
+  res = 300, width = 160, height = 80, units = "mm"
+)
+user.comp.res %>%
+  mutate(
+    metric = factor(metric, levels = rev(c("obs", "act_day", "obs_per_day"))),
+    comp_res = case_when(
+      long_short < 0.05 & short_long >= 0.05 ~ "Long-term > Short-term",
+      long_short >= 0.05 & short_long < 0.05 ~ "Short-term > Long-term",
+      long_short >= 0.05 & short_long >= 0.05 ~ "No significant difference",
+      long_short < 0.05 & short_long < 0.05 ~ "Error"
+    )
+  ) %>%
   ggplot() +
-  geom_col(aes(city, rank, fill = obsr_grp), position = "dodge") +
-  facet_wrap(.~ metric, scales = "free") +
+  geom_tile(aes(city, metric, fill = comp_res), col = "white") +
+  labs(x = "", y = "Metric", fill = "Comparison result") +
+  scale_fill_manual(
+    breaks = c(
+      "Long-term > Short-term",
+      "Short-term > Long-term",
+      "No significant difference"
+    ),
+    values = c("#1047A9", "#FFA500", "grey")
+  ) +
+  scale_y_discrete(
+    breaks = c("obs", "act_day", "obs_per_day"),
+    labels = c(
+      "Annual\n observations",
+      "Annual\n active\n days",
+      "Annual\n daily\n observations"
+    )
+  ) +
+  theme_bw() +
   theme(axis.text.x = element_text(angle = 90))
+dev.off()
 # Conclusion: Long-term users has higher observation because they active more days every year.
 
 ## Factor mean value change ----
