@@ -180,7 +180,8 @@ user.comp.res <-
       lapply(., function(x) x$p.value) %>%
       unlist(),
     .groups = "drop"
-  )
+  ) %>%
+  mutate(city = factor(city, levels = kCity))
 
 jpeg(
   filename = paste0("data_proc/user_behavior_comp_", Sys.Date(), ".jpg"),
@@ -356,7 +357,7 @@ lmdi_scale <- lmdi %>%
   select(city, year, delt, delt_val_scale) %>%
   pivot_wider(names_from = city, values_from = delt_val_scale) %>%
   pivot_longer(
-    cols = unique(lmdi_scale$city),
+    cols = kCity,
     names_to = "city", values_to = "delt_val_scale"
   ) %>%
   # Add factor information.
