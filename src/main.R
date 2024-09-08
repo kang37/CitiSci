@@ -141,7 +141,7 @@ jpeg(
     geom_vline(xintercept = 2019, col = "red", alpha = 0.5) +
     facet_wrap(.~ city, scale = "free", nrow = 1) +
     expand_limits(y = 0) +
-    labs(x = "Year", y = "Number of observations")
+    labs(x = "Year", y = "Observations")
 )
 dev.off()
 
