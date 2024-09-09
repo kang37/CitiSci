@@ -19,6 +19,30 @@ kCityRaw <- c(
 
 ## iNaturalist data ----
 ### Raw data ----
+# Filter Kyoto Prefecture data to keep only Kyoto city data.
+if (!file.exists("data_raw/iNatData/Kyoto.csv")) {
+  # Kyoto boundary and latitude and longitude range.
+  kyoto.boundary <-
+    st_read("data_raw/KyotoCityBoundary", layer = "kyoto_city_boundary")
+  kyoto.latlon.range <- st_bbox(kyoto.boundary)
+
+  # Process Kyoto prefecture data.
+  read.csv("data_raw/iNatData/Kyoto_pref.csv") %>%
+    tibble() %>%
+    filter(
+      latitude > kyoto.latlon.range[names(kyoto.latlon.range) == "ymin"],
+      latitude < kyoto.latlon.range[names(kyoto.latlon.range) == "ymax"],
+      longitude > kyoto.latlon.range[names(kyoto.latlon.range) == "xmin"],
+      longitude < kyoto.latlon.range[names(kyoto.latlon.range) == "xmax"]
+    ) %>%
+    # Turn to sf.
+    st_as_sf(coords = c("longitude", "latitude"), crs = st_crs(kyoto.boundary)) %>%
+    # Keep iNaturalist data inside Kyoto Boundary.
+    st_intersection(kyoto.boundary) %>%
+    as_tibble() %>%
+    write.csv("data_raw/iNatData/Kyoto.csv")
+}
+
 # Raw data directory.
 inat.file <- paste0("data_raw/iNatData/", kCityRaw, ".csv")
 
