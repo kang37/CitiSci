@@ -135,6 +135,45 @@ table(record.yr$year, record.yr$city)
 # Add data to the matrix gaps.
 
 # Analysis ----
+## Research area ----
+# Japan boundary.
+japan.boundary <- st_read(
+  dsn = "data_raw/JapanBoundary", layer = "Japan_boundary"
+)
+
+# City location.
+city.loc <- c(
+  "Tokyo", 139.6917, 35.6895, 0.6, 0,
+  "Yokohama", 139.6380, 35.4437, -0.6, -0.3,
+  "Osaka", 135.5022, 34.6937, 0.3, -0.2,
+  "Nagoya", 136.9066, 35.1815, 0, 0.3,
+  "Sapporo", 141.3545, 43.0618, 0, 0.3,
+  "Fukuoka", 130.4017, 33.5904, 0, 0.3,
+  "Kobe", 135.1955, 34.6901, -0.7, 0,
+  "Kawasaki", 139.7172, 35.5308, 0.6, 0,
+  "Kyoto", 135.7681, 35.0116, -0.1, 0.2,
+  "Saitama", 139.6489, 35.8617, -0.6, 0.3,
+  "Hiroshima", 132.4596, 34.3853, 0, 0.3,
+  "Sendai", 140.8719, 38.2682, 0, 0
+) %>%
+  matrix(byrow = TRUE, ncol = 5) %>%
+  as.data.frame() %>%
+  rename_with(~ c("city", "longitude", "latitude", "x_adj", "y_adj")) %>%
+  filter(city %in% kCity) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = st_crs(japan.boundary)) %>%
+  mutate(x_adj = as.numeric(x_adj), y_adj = as.numeric(y_adj))
+
+# Research area map.
+jpeg(
+  filename = paste0("data_proc/map_", Sys.Date(), ".jpg"),
+  res = 300, width = 160, height = 80, units = "mm"
+)
+ggplot() +
+  geom_sf(data = japan.boundary, fill = "darkgrey", col = NA) +
+  geom_sf(data = city.loc, size = 1.5, fill = "red", col = "white", shape = 21, stroke = 0.2) +
+  theme_bw()
+dev.off()
+
 ## General description ----
 record.filt %>%
   group_by(city) %>%
