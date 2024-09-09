@@ -12,15 +12,15 @@ source("src/function.R")
 # Read data ----
 ## Constant ----
 # City factor levels based on population.
-kCity <- c(
+kCityRaw <- c(
   "Tokyo", "Yokohama", "Osaka", "Nagoya", "Sapporo", "Fukuoka",
-  "Kobe", "Kawasaki", "Kyoto", "Saitama"
+  "Kobe", "Kawasaki", "Kyoto", "Saitama", "Hiroshima", "Sendai"
 )
 
 ## iNaturalist data ----
 ### Raw data ----
 # Raw data directory.
-inat.file <- list.files("data_raw/iNatData", full.names = TRUE)
+inat.file <- paste0("data_raw/iNatData/", kCityRaw, ".csv")
 
 # Middle data of raw data.
 record.raw <- lapply(inat.file, GetRaw) %>%
@@ -65,8 +65,8 @@ tar.city <- record.raw %>%
   summarise(user_pop = length(unique(user_id)), .groups = "drop") %>%
   group_by(city) %>%
   summarise(max_user_pop = max(user_pop), .groups = "drop") %>%
-  filter(max_user_pop > 50) %>%
-  mutate(city = factor(city, levels = kCity))
+  filter(max_user_pop > 50)
+kCity <- kCityRaw[kCityRaw %in% tar.city$city]
 
 # Remove super users and non-target cities.
 record.filt <- record.raw %>%
@@ -357,7 +357,7 @@ lmdi_scale <- lmdi %>%
   select(city, year, delt, delt_val_scale) %>%
   pivot_wider(names_from = city, values_from = delt_val_scale) %>%
   pivot_longer(
-    cols = kCity,
+    cols = all_of(kCity),
     names_to = "city", values_to = "delt_val_scale"
   ) %>%
   # Add factor information.
