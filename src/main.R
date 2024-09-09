@@ -192,7 +192,7 @@ record.yr %>%
 # If there is no dir called "data_proc", make one.
 jpeg(
   filename = paste0("data_proc/obs_chg_", Sys.Date(), ".jpg"),
-  res = 350, width = 4000, height = 600
+  res = 350, width = 3800, height = 600
 )
 (
   record.yr %>%
@@ -444,7 +444,7 @@ lmdi_scale <- lmdi %>%
 # Visualization by tile plot.
 jpeg(
   filename = paste0("data_proc/lmdi_effect_", Sys.Date(), ".jpg"),
-  res = 400, width = 3500, height = 2000
+  res = 300, width = 3500, height = 2000
 )
 (
   lmdi_scale %>%
@@ -454,7 +454,7 @@ jpeg(
       name = "Effect", low = "darkred", high = "darkgreen", mid = "white",
       na.value = "grey"
     ) +
-    geom_text(aes(label = sprintf("%.1f", delt_val_scale)), size = 3) +
+    geom_text(aes(label = sprintf("%.1f", delt_val_scale))) +
     theme_bw() +
     theme(axis.text.x = element_text(angle = 90)) +
     facet_wrap(.~ delt, nrow = 1) +
