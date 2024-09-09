@@ -1,9 +1,9 @@
 # Statement ----
-# 用于分析新冠对公民科学行为的影响，主要思路：从年度和月度粒度上分析，然后分用户组进行分析。
+# Long-term, multiple-city study of citizen science change in Japan, with driving factor analysis.
 
 # Package ----
 pacman::p_load(
-  openxlsx, dplyr, tidyr, ggplot2, ggh4x, patchwork, reshape2, lubridate
+  openxlsx, sf, reshape2, lubridate, dplyr, tidyr, ggplot2, ggh4x, patchwork
 )
 
 # Function ----
@@ -270,7 +270,21 @@ lmdi <- record.user.yr %>%
   summarise(
     o_i = sum(obs), p_i = n(), d_i = sum(act_day), .groups = "drop"
   ) %>%
-  arrange(city, year, obsr_grp)
+  arrange(city, year, obsr_grp) %>%
+  # To solve zero-value problem, give zero-value a very small value.
+  pivot_longer(
+    cols = c(o_i, p_i, d_i), names_to = "metric", values_to = "metric_val"
+  ) %>%
+  mutate(metric_val = as.numeric(metric_val)) %>%
+  pivot_wider(
+    names_from = "obsr_grp", values_from = "metric_val", values_fill = 1
+  ) %>%
+  pivot_longer(
+    cols = c(long, short), names_to = "obsr_grp", values_to = "metric_val"
+  ) %>%
+  pivot_wider(
+    names_from = "metric", values_from = "metric_val"
+  )
 # Check data.
 table(lmdi$city, lmdi$year, lmdi$obsr_grp)
 
@@ -289,13 +303,8 @@ lmdi <- inner_join(
   ungroup() %>%
   group_by(city, year_t) %>%
   mutate(p_t = sum(p_it)) %>%
-  ungroup()
-
-# Row number should be 80; but since we filtered some rows with missin data in the last step, so it should be less than 80.
-nrow(lmdi)
-
-# Calculate the variables for LMDI.
-lmdi <- lmdi %>%
+  ungroup() %>%
+  # Calculate the variables for LMDI.
   mutate(
     s_i0 = p_i0 / p_0,
     s_it = p_it / p_t,
@@ -305,7 +314,7 @@ lmdi <- lmdi %>%
     i_it = o_it / d_it
   ) %>%
   mutate(
-    diff_o_it_o_i0 = case_when(o_it - o_i0 == 1 ~ 0.0001, TRUE ~ o_it - o_i0),
+    diff_o_it_o_i0 = o_it - o_i0,
     rate_o_it_o_i0 = case_when(o_it / o_i0 == 1 ~ 0.9999, TRUE ~ o_it / o_i0)
   ) %>%
   mutate(
@@ -325,6 +334,7 @@ lmdi <- lmdi %>%
     .groups = "drop"
   ) %>%
   mutate(delt_o = o_t - o_0)
+
 # Scale the effects.
 lmdi_scale <- lmdi %>%
   # Scale by dividing max value.
