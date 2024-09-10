@@ -254,8 +254,8 @@ user.comp.res %>%
   mutate(
     metric = factor(metric, levels = rev(c("obs", "act_day", "obs_per_day"))),
     comp_res = case_when(
-      long_short < 0.05 & short_long >= 0.05 ~ "Long-term > Short-term",
-      long_short >= 0.05 & short_long < 0.05 ~ "Short-term > Long-term",
+      long_short < 0.05 & short_long >= 0.05 ~ "Regular > Non-regular",
+      long_short >= 0.05 & short_long < 0.05 ~ "Non-regular > Regular",
       long_short >= 0.05 & short_long >= 0.05 ~ "No significant difference",
       long_short < 0.05 & short_long < 0.05 ~ "Error"
     )
@@ -265,8 +265,8 @@ user.comp.res %>%
   labs(x = "", y = "Metric", fill = "Comparison result") +
   scale_fill_manual(
     breaks = c(
-      "Long-term > Short-term",
-      "Short-term > Long-term",
+      "Regular > Non-regular",
+      "Non-regular > Regular",
       "No significant difference"
     ),
     values = c("#1047A9", "#FFA500", "grey")
